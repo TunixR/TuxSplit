@@ -1,21 +1,22 @@
 mod config;
 mod ui;
 
-use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
-use std::rc::Rc;
+
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 // use api::api::{create, reset, split, start};
 
-use livesplit_core::{Run, Segment, Timer, TimerPhase};
-use tracing::info;
+use glib::ffi::g_warn_message;
+use livesplit_core::{HotkeySystem, Run, Segment, SharedTimer, Timer, TimerPhase};
+use tracing::{debug, info, warn};
 use tracing_subscriber;
 
 use adw::prelude::*;
 use adw::{Application, ApplicationWindow};
+use glib::ControlFlow::Break;
 use glib::ControlFlow::Continue;
 use gtk4::prelude::*;
 use gtk4::{gdk::Display, Box as GtkBox, Builder, Button, CssProvider, Label, Orientation};
@@ -36,36 +37,40 @@ fn main() {
         .application_id("org.LunixRunTools.livesplit-gtk-beta")
         .build();
 
-    let app_state = Rc::new(RefCell::new(LiveSplitGTK::new()));
+    let app_state = Arc::new(RwLock::new(LiveSplitGTK::new()));
 
     app.connect_activate(move |app| {
-        app_state.borrow_mut().build_ui(app);
+        app_state.write().unwrap().build_ui(app);
     });
     app.run();
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct LiveSplitGTK {
-    pub timer: Rc<RefCell<Timer>>,
-    pub config: Rc<RefCell<Config>>,
+    pub timer: Arc<RwLock<Timer>>,
+    pub config: Arc<RwLock<Config>>,
+    pub hotkey_system: Arc<RwLock<HotkeySystem>>,
 }
 
 impl LiveSplitGTK {
     pub fn new() -> Self {
         let config = Config::parse("config.yaml").unwrap_or_default();
-        info!(
-            "Loading config from {} with result {:?}",
-            "config.yaml", config
-        );
         let run = config.parse_run_or_default();
 
         let mut timer = Timer::new(run).expect("Failed to create timer");
 
-        config.configure_timer(&mut timer);
+        let stimer = timer.into_shared();
+
+        config.configure_timer(&mut stimer.write().unwrap());
+
+        let Some(hotkey_system) = config.create_hotkey_system(stimer.clone()) else {
+            panic!("Could not load HotkeySystem")
+        };
 
         Self {
-            timer: Rc::new(RefCell::new(timer)),
-            config: Rc::new(RefCell::new(config)),
+            timer: stimer,
+            config: Arc::new(RwLock::new(config)),
+            hotkey_system: Arc::new(RwLock::new(hotkey_system)),
         }
     }
 
@@ -88,7 +93,8 @@ impl LiveSplitGTK {
         // To ensure changes in config and timer translate
         let timer_binding = self.timer.clone();
         let config_binding = self.config.clone();
-        let timer_ui = TimerUI::new(timer_binding.borrow_mut(), config_binding.borrow());
+        let timer_ui = TimerUI::new(timer_binding, config_binding);
+
         let ui = timer_ui.build_ui(); // Prevent expiration
 
         let window = adw::ApplicationWindow::builder()

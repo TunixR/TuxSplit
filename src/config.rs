@@ -12,7 +12,7 @@ use std::{
 };
 use tracing::error;
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
@@ -25,7 +25,7 @@ pub struct Config {
     connections: Connections,
 }
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct General {
     pub splits: Option<PathBuf>,
@@ -34,14 +34,14 @@ pub struct General {
     pub auto_splitter: Option<PathBuf>,
 }
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 struct Window {
     always_on_top: bool,
 }
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 struct Connections {

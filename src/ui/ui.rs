@@ -2,11 +2,13 @@
 
 use super::super::config::Config;
 
-use std::cell::{Ref, RefMut};
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use adw::prelude::*;
 use adw::ApplicationWindow;
 use adw::{self, Clamp};
+use glib::ControlFlow::Continue;
 use gtk4::Orientation::{Horizontal, Vertical};
 use gtk4::{Align, Box as GtkBox, CenterBox, Label, ListBox};
 
@@ -18,9 +20,9 @@ use tracing::debug;
 pub struct MainUI {}
 
 // Timer layout for runs
-pub struct TimerUI<'a> {
-    timer: RefMut<'a, Timer>,
-    config: Ref<'a, Config>,
+pub struct TimerUI {
+    timer: Arc<RwLock<Timer>>,
+    config: Arc<RwLock<Config>>,
 }
 
 // Splits editor/Creator
@@ -32,8 +34,8 @@ pub struct AboutUI {}
 
 pub struct HelpUI {}
 
-impl<'a> TimerUI<'a> {
-    pub fn new(timer: RefMut<'a, Timer>, config: Ref<'a, Config>) -> Self {
+impl TimerUI {
+    pub fn new(timer: Arc<RwLock<Timer>>, config: Arc<RwLock<Config>>) -> Self {
         Self { timer, config }
     }
 
@@ -47,62 +49,125 @@ impl<'a> TimerUI<'a> {
             .valign(Align::Center)
             .halign(Align::Center)
             .width_request(300)
+            .margin_top(24)
+            .margin_bottom(24)
+            .margin_start(24)
+            .margin_end(24)
             .spacing(20)
             .build();
 
         // =====================
         // Run Info Section
         // =====================
+        let run_info = TimerUI::build_run_info(&self.timer.read().unwrap());
+
+        //
+        // Splits List
+        // =====================
+        let splits = ListBox::new();
+        splits.add_css_class("boxed-list");
+        let splits_rows = TimerUI::build_splits_list(&self.timer.read().unwrap());
+        for row in splits_rows {
+            splits.append(&row);
+        }
+
+        // =====================
+        // Current Split + Timer
+        // =====================
+        let center_box = CenterBox::builder()
+            .orientation(Horizontal)
+            .margin_start(18)
+            .margin_end(18)
+            .build();
+        center_box.set_start_widget(Some(&TimerUI::build_center_box_current_split_info(
+            &self.timer.read().unwrap(),
+            &self.config.read().unwrap(),
+        )));
+        center_box.set_end_widget(Some(&TimerUI::build_center_box_timer(
+            &self.timer.read().unwrap(),
+            &self.config.read().unwrap(),
+        )));
+
+        let splits_binding = splits.clone();
+        let center_box_binding = center_box.clone();
+
+        let timer_binding = self.timer.clone();
+        let config_binding = self.config.clone();
+
+        glib::timeout_add_local(Duration::from_millis(16), move || {
+            let t = timer_binding.read().unwrap();
+            let c = config_binding.read().unwrap();
+            // =====================
+            // Splits List
+            // =====================
+            // Remove all existing rows
+            for (index, _) in t.run().segments().iter().enumerate() {
+                if let Some(row) = splits_binding.row_at_index(0) {
+                    splits_binding.remove(&row);
+                }
+            }
+            // Now rebuild
+            let splits_rows = TimerUI::build_splits_list(&t);
+            for row in splits_rows {
+                splits_binding.append(&row);
+            }
+
+            // =====================
+            // Current Split + Timer
+            // =====================
+            center_box_binding
+                .set_start_widget(Some(&TimerUI::build_center_box_current_split_info(&t, &c)));
+            center_box_binding.set_end_widget(Some(&TimerUI::build_center_box_timer(&t, &c)));
+
+            // =====================
+            // Assemble everything
+            // =====================
+            Continue
+        });
+
+        // =====================
+        // Assemble everything
+        // =====================
+        livesplit_gtk.append(&run_info);
+        livesplit_gtk.append(&splits);
+        livesplit_gtk.append(&center_box);
+
+        clamp.set_child(Some(&livesplit_gtk));
+
+        clamp
+    }
+}
+
+impl TimerUI {
+    fn build_run_info(timer: &Timer) -> GtkBox {
         let run_info = GtkBox::builder()
             .orientation(Vertical)
             .halign(Align::Center)
             .build();
 
-        let run_name = Label::builder().label(self.timer.run().game_name()).build();
+        let run_name = Label::builder().label(timer.run().game_name()).build();
         run_name.add_css_class("title-2");
         debug!("Run Name: {}", run_name.label());
 
-        let category = Label::builder()
-            .label(self.timer.run().category_name())
-            .build();
+        let category = Label::builder().label(timer.run().category_name()).build();
         category.add_css_class("heading");
         debug!("Category: {}", category.label());
 
         run_info.append(&run_name);
         run_info.append(&category);
+        run_info
+    }
 
-        // =====================
-        // Splits List
-        // =====================
-        let splits = ListBox::new();
-        splits.add_css_class("boxed-list");
+    fn build_splits_list(timer: &Timer) -> Vec<adw::ActionRow> {
+        let mut rows = Vec::new();
 
-        // Helper to create rows
-        fn make_split_row(title: &str, value: &str, classes: &[&str]) -> adw::ActionRow {
-            let row = adw::ActionRow::builder().title(title).build();
-            let label = Label::builder()
-                .label(value)
-                .halign(Align::Center)
-                .valign(Align::Center)
-                .build();
-            label.add_css_class("timer");
-            for cls in classes {
-                label.add_css_class(cls);
-            }
-            row.add_suffix(&label);
-            row
-        }
-
-        let segments = self.timer.run().segments();
-        let mut rows = Vec::with_capacity(segments.len());
-
-        let opt_current_segment_index = self.timer.current_split_index();
+        let segments = timer.run().segments();
+        let opt_current_segment_index = timer.current_split_index();
 
         for (index, segment) in segments.iter().enumerate() {
             let title = segment.name();
             let mut value = String::from("--");
 
-            // Configure the value based on the current segment index
             if let Some(current_segment_index) = opt_current_segment_index {
                 if current_segment_index > index {
                     value = format!(
@@ -118,28 +183,21 @@ impl<'a> TimerUI<'a> {
                     value = String::from("WIP") // TODO: Allow for time instead of comparison | Allow for gametime/realtime comparison
                 }
             }
+
             let classes = if index == segments.len() - 1 {
                 &["finalsplit"][..]
             } else {
                 &["split"][..]
             };
-            rows.push((title, value, classes));
+
+            rows.push(Self::make_split_row(title, &value, classes));
         }
 
-        for (title, value, classes) in rows {
-            splits.append(&make_split_row(&title, &value, classes));
-        }
+        rows
+    }
 
-        // =====================
-        // Current Split + Timer
-        // =====================
-        let center_box = CenterBox::builder()
-            .orientation(Horizontal)
-            .margin_start(18)
-            .margin_end(18)
-            .build();
-
-        // --- Left side: current split info ---
+    fn build_center_box_current_split_info(timer: &Timer, config: &Config) -> GtkBox {
+        // Left side: current split info
         let current_split = GtkBox::builder().orientation(Vertical).build();
 
         // Best
@@ -152,10 +210,8 @@ impl<'a> TimerUI<'a> {
         let best_label = Label::builder().label("Best:").build();
         best_label.add_css_class("caption-heading");
 
-        let best_comparison_split = self
-            .timer
-            .current_split()
-            .unwrap_or(segments.get(0).unwrap());
+        let segments = timer.run().segments();
+        let best_comparison_split = timer.current_split().unwrap_or(segments.get(0).unwrap());
         let best_comparison_time = best_comparison_split
             .best_segment_time()
             .real_time
@@ -175,7 +231,7 @@ impl<'a> TimerUI<'a> {
         best_box.append(&best_label);
         best_box.append(&best_value);
 
-        // comparison
+        // Comparison
         let comparison_box = GtkBox::builder()
             .orientation(Horizontal)
             .spacing(2)
@@ -184,7 +240,7 @@ impl<'a> TimerUI<'a> {
         let comparison_label = Label::builder() // TODO: Map comparisons to simpler string representations
             .label(format!(
                 "{}:",
-                self.config
+                config
                     .general
                     .comparison
                     .as_ref()
@@ -193,13 +249,11 @@ impl<'a> TimerUI<'a> {
             .build();
         comparison_label.add_css_class("caption-heading");
 
-        let comparison_time = self
-            .timer
+        let comparison_time = timer
             .current_split()
             .unwrap_or(segments.get(0).unwrap())
             .comparison(
-                &self
-                    .config
+                config
                     .general
                     .comparison
                     .as_ref()
@@ -226,20 +280,24 @@ impl<'a> TimerUI<'a> {
         current_split.append(&best_box);
         current_split.append(&comparison_box);
 
-        // --- Right side: timer display ---
+        current_split
+    }
+
+    fn build_center_box_timer(timer: &Timer, config: &Config) -> GtkBox {
+        // Right side: timer display
         let timer_box = GtkBox::new(Horizontal, 0);
         timer_box.add_css_class("timer");
         timer_box.add_css_class("greensplit");
 
-        let time = self.timer.current_attempt_duration();
+        let time = timer.current_attempt_duration();
         let minutes = time.total_seconds() as i32 / 60 % 60;
         let seconds = time.total_seconds() as i32 % 60;
         let hour_minutes_seconds_timer = Label::builder()
-            .label(format!("{:02}.{:02}", minutes, seconds))
+            .label(format!("{:02}:{:02}.", minutes, seconds))
             .build();
         hour_minutes_seconds_timer.add_css_class("bigtimer");
 
-        let milliseconds = time.total_milliseconds() as i32 % 1000;
+        let milliseconds = time.total_milliseconds() as i32 % 100;
         let milis_timer = Label::builder()
             .label(format!("{:02}", milliseconds))
             .margin_top(14)
@@ -249,18 +307,21 @@ impl<'a> TimerUI<'a> {
         timer_box.append(&hour_minutes_seconds_timer);
         timer_box.append(&milis_timer);
 
-        center_box.set_start_widget(Some(&current_split));
-        center_box.set_end_widget(Some(&timer_box));
+        timer_box
+    }
 
-        // =====================
-        // Assemble everything
-        // =====================
-        livesplit_gtk.append(&run_info);
-        livesplit_gtk.append(&splits);
-        livesplit_gtk.append(&center_box);
-
-        clamp.set_child(Some(&livesplit_gtk));
-
-        clamp
+    fn make_split_row(title: &str, value: &str, classes: &[&str]) -> adw::ActionRow {
+        let row = adw::ActionRow::builder().title(title).build();
+        let label = Label::builder()
+            .label(value)
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .build();
+        label.add_css_class("timer");
+        for cls in classes {
+            label.add_css_class(cls);
+        }
+        row.add_suffix(&label);
+        row
     }
 }
