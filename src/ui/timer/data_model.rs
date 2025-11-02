@@ -186,26 +186,31 @@ pub fn compute_split_rows(timer: &Timer, config: &Config) -> Vec<SplitRowData> {
                 // Past split rows
                 let split_time = segment_split_time(segment, timer);
 
-                let diff = split_time
-                    .checked_sub(segment_comparison)
-                    .unwrap_or_default();
-
-                if config.general.split_format == Some(String::from("Time")) {
-                    value_text = format_split_time(&segment.split_time(), &timer, &config);
+                if split_time == TimeDuration::ZERO {
+                    // The split was skipped
+                    value_text = "--".to_string();
                 } else {
-                    // DIFF
-                    value_text = format_signed(diff);
-                }
+                    let diff = split_time
+                        .checked_sub(segment_comparison)
+                        .unwrap_or_default();
 
-                label_classes = classify_split_label(
-                    segment_comparison_duration,
-                    split_time
-                        .checked_sub(previous_comparison_time)
-                        .unwrap_or_default(),
-                    diff,
-                    goldsplit_duration,
-                    false, // not running
-                );
+                    if config.general.split_format == Some(String::from("Time")) {
+                        value_text = format_split_time(&segment.split_time(), &timer, &config);
+                    } else {
+                        // DIFF
+                        value_text = format_signed(diff);
+                    }
+
+                    label_classes = classify_split_label(
+                        segment_comparison_duration,
+                        split_time
+                            .checked_sub(previous_comparison_time)
+                            .unwrap_or_default(),
+                        diff,
+                        goldsplit_duration,
+                        false, // not running
+                    );
+                }
             }
         }
 
