@@ -107,115 +107,123 @@ fn format_signed(diff: TimeDuration, config: &mut Config) -> String {
     format!("{}{}", sign, formatted)
 }
 
-/// Builds the data for all split rows given the current `Timer` and `Config`.
-/// This function is pure (no GTK dependencies) and is intended to be unit-tested.
-/// Behavior mirrors the logic in `TimerUI::build_splits_list`.
 pub fn compute_split_rows(timer: &Timer, config: &mut Config) -> Vec<SplitRowData> {
-    let mut rows = Vec::new();
-
     let segments = timer.run().segments();
     let opt_current_segment_index = timer.current_split_index();
 
-    for (index, segment) in segments.iter().enumerate() {
-        let title = segment.name().to_string();
+    segments
+        .iter()
+        .enumerate()
+        .map(|(index, segment)| {
+            compute_segment_row(timer, config, opt_current_segment_index, index, segment)
+        })
+        .collect()
+}
 
-        // Default value is the comparison for this segment.
-        let segment_comparison = segment
-            .comparison_timing_method(timer.current_comparison(), timer.current_timing_method())
+/// Builds the data for a given segment given the current `Timer` and `Config`.
+/// This function is pure (no GTK dependencies) and is intended to be unit-tested.
+pub fn compute_segment_row(
+    timer: &Timer,
+    config: &mut Config,
+    opt_current_segment_index: Option<usize>,
+    index: usize,
+    segment: &livesplit_core::Segment,
+) -> SplitRowData {
+    let title = segment.name().to_string();
+
+    // Default value is the comparison for this segment.
+    let segment_comparison = segment
+        .comparison_timing_method(timer.current_comparison(), timer.current_timing_method())
+        .unwrap_or_default()
+        .to_duration();
+
+    let mut value_text = format_split_time(
+        &segment.comparison(timer.current_comparison()),
+        &timer,
+        config,
+    );
+
+    let mut segment_classes: Vec<&'static str> = Vec::new();
+    let mut label_classes: Vec<&'static str> = Vec::new();
+
+    if let Some(current_segment_index) = opt_current_segment_index {
+        let goldsplit_duration = best_segment_duration(segment, timer);
+
+        let (previous_comparison_duration, previous_comparison_time) =
+            previous_comparison_values(timer, index);
+
+        let segment_comparison_duration = segment_comparison
+            .checked_sub(previous_comparison_duration)
             .unwrap_or_default()
-            .to_duration();
+            .abs(); // Abs because later split might be shorter than previous
 
-        let mut value_text = format_split_time(
-            &segment.comparison(timer.current_comparison()),
-            &timer,
-            config,
-        );
+        if current_segment_index == index {
+            // Current segment row
+            segment_classes.push("current-segment");
 
-        let mut segment_classes: Vec<&'static str> = Vec::new();
-        let mut label_classes: Vec<&'static str> = Vec::new();
+            let current_duration = current_attempt_running_duration(timer);
 
-        if let Some(current_segment_index) = opt_current_segment_index {
-            let goldsplit_duration = best_segment_duration(segment, timer);
+            let diff = current_duration // Represents the time difference to comparison.
+                .checked_sub(segment_comparison)
+                .unwrap_or_default();
 
-            let (previous_comparison_duration, previous_comparison_time) =
-                previous_comparison_values(timer, index);
+            // We will calculate how long the split has been running to either show diff or comparison
+            let split_running_time = if index == 0 {
+                current_duration
+            } else {
+                // Match original behavior: assert current > previous comparison time.
+                assert!(current_duration > previous_comparison_time);
+                current_duration
+                    .checked_sub(previous_comparison_time)
+                    .unwrap_or_default()
+            };
 
-            let segment_comparison_duration = segment_comparison
-                .checked_sub(previous_comparison_duration)
-                .unwrap_or_default()
-                .abs(); // Abs because later split might be shorter than previous
-
-            if current_segment_index == index {
-                // Current segment row
-                segment_classes.push("current-segment");
-
-                let current_duration = current_attempt_running_duration(timer);
-
-                let diff = current_duration // Represents the time difference to comparison.
-                    .checked_sub(segment_comparison)
-                    .unwrap_or_default();
-
-                // We will calculate how long the split has been running to either show diff or comparison
-                let split_running_time = if index == 0 {
-                    current_duration
-                } else {
-                    // Match original behavior: assert current > previous comparison time.
-                    assert!(current_duration > previous_comparison_time);
-                    current_duration
-                        .checked_sub(previous_comparison_time)
-                        .unwrap_or_default()
-                };
-
-                if diff.is_positive() && segment_comparison != TimeDuration::ZERO
-                    || (goldsplit_duration != TimeDuration::ZERO
-                        && split_running_time >= goldsplit_duration)
-                {
-                    value_text = format_signed(diff, config);
-                }
-            }
-
-            if current_segment_index > index {
-                // Past split rows
-                let split_time = segment_split_time(segment, timer);
-
-                if split_time == TimeDuration::ZERO {
-                    // The split was skipped
-                    value_text = "--".to_string();
-                } else {
-                    let diff = split_time
-                        .checked_sub(segment_comparison)
-                        .unwrap_or_default();
-
-                    if config.general.split_format == Some(String::from("Time")) {
-                        value_text = format_split_time(&segment.split_time(), &timer, config);
-                    } else if segment_comparison != TimeDuration::ZERO {
-                        // DIFF
-                        value_text = format_signed(diff, config);
-                    }
-                    if segment_comparison != TimeDuration::ZERO {
-                        label_classes = classify_split_label(
-                            segment_comparison_duration,
-                            split_time
-                                .checked_sub(previous_comparison_time)
-                                .unwrap_or_default(),
-                            diff,
-                            goldsplit_duration,
-                            false, // not running
-                        );
-                    }
-                }
+            if diff.is_positive() && segment_comparison != TimeDuration::ZERO
+                || (goldsplit_duration != TimeDuration::ZERO
+                    && split_running_time >= goldsplit_duration)
+            {
+                value_text = format_signed(diff, config);
             }
         }
 
-        rows.push(SplitRowData {
-            title,
-            value_text,
-            segment_classes,
-            label_classes,
-        });
-    }
+        if current_segment_index > index {
+            // Past split rows
+            let split_time = segment_split_time(segment, timer);
 
-    rows
+            if split_time == TimeDuration::ZERO {
+                // The split was skipped
+                value_text = "--".to_string();
+            } else {
+                let diff = split_time
+                    .checked_sub(segment_comparison)
+                    .unwrap_or_default();
+
+                if config.general.split_format == Some(String::from("Time")) {
+                    value_text = format_split_time(&segment.split_time(), &timer, config);
+                } else if segment_comparison != TimeDuration::ZERO {
+                    // DIFF
+                    value_text = format_signed(diff, config);
+                }
+                if segment_comparison != TimeDuration::ZERO {
+                    label_classes = classify_split_label(
+                        segment_comparison_duration,
+                        split_time
+                            .checked_sub(previous_comparison_time)
+                            .unwrap_or_default(),
+                        diff,
+                        goldsplit_duration,
+                        false, // not running
+                    );
+                }
+            }
+        }
+    }
+    SplitRowData {
+        title,
+        value_text,
+        segment_classes,
+        label_classes,
+    }
 }
 
 /// Calculates the CSS-like classes for a split label, based on comparison and timing math.

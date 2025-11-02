@@ -80,25 +80,63 @@ impl TimerUI {
         let splits_binding = splits.clone();
         let center_box_binding = center_box.clone();
 
+        let mut rendered_comparison = self.timer.read().unwrap().current_comparison().to_string();
+        let mut rendered_phase = self.timer.read().unwrap().current_phase();
+        let mut render_all_splits = true;
+
         let timer_binding = self.timer.clone();
         let config_binding = self.config.clone();
 
         glib::timeout_add_local(Duration::from_millis(16), move || {
             let t = timer_binding.read().unwrap();
             let mut c = config_binding.write().unwrap();
+
+            render_all_splits = (rendered_comparison != t.current_comparison().to_string())
+                || (rendered_phase != t.current_phase());
+            rendered_comparison = t.current_comparison().to_string();
+            rendered_phase = t.current_phase();
+
             // =====================
             // Splits List
             // =====================
             // Remove all existing rows
-            for _ in t.run().segments().iter() {
-                if let Some(row) = splits_binding.row_at_index(0) {
-                    splits_binding.remove(&row);
+            if render_all_splits {
+                render_all_splits = false;
+                // REBUILD ONCE
+                for _ in t.run().segments().iter() {
+                    if let Some(row) = splits_binding.row_at_index(0) {
+                        splits_binding.remove(&row);
+                    }
                 }
-            }
-            // Now rebuild
-            let splits_rows = TimerUI::build_splits_list(&t, &mut c);
-            for row in splits_rows {
-                splits_binding.append(&row);
+                // Now rebuild
+                let splits_rows = TimerUI::build_splits_list(&t, &mut c);
+                for row in splits_rows {
+                    splits_binding.append(&row);
+                }
+            } else if t.current_phase().is_running() {
+                render_all_splits = true;
+                let opt_current_segment_index = t.current_split_index().unwrap_or(0);
+                let segments = t.run().segments();
+
+                for (index, _) in segments.iter().enumerate() {
+                    if index == opt_current_segment_index
+                        || index == opt_current_segment_index.saturating_sub(1)
+                        || index == opt_current_segment_index.saturating_add(1)
+                    {
+                        if let Some(row) = splits_binding.row_at_index(index as i32) {
+                            splits_binding.remove(&row);
+                            let row = widgets::split_row(&data_model::compute_segment_row(
+                                &t,
+                                &mut c,
+                                Some(opt_current_segment_index),
+                                index,
+                                &segments[index],
+                            ));
+                            row.set_selectable(false);
+                            splits_binding.insert(&row, index as i32);
+                        }
+                    }
+                }
             }
 
             // =====================
@@ -157,7 +195,11 @@ impl TimerUI {
     fn build_splits_list(timer: &Timer, config: &mut Config) -> Vec<adw::ActionRow> {
         data_model::compute_split_rows(timer, config)
             .into_iter()
-            .map(|d| widgets::split_row(&d))
+            .map(|d| {
+                let row = widgets::split_row(&d);
+                row.set_selectable(false);
+                row
+            })
             .collect()
     }
 
