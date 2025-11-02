@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::ui::timer::data_model::{CurrentSplitInfoData, SplitRowData};
+use crate::ui::timer::data_model::{SelectedSegmentInfoData, SplitRowData};
 use crate::utils::time::format_timer;
 
 use adw::prelude::ActionRowExt;
@@ -68,8 +68,8 @@ pub fn build_timer_box(timer: &Timer, config: &mut Config) -> GtkBox {
 /// - Best: <value>
 /// - <Comparison Label>: <value>
 /// Mirrors existing styling for captions and timer labels.
-pub fn build_current_split_info_box(data: &CurrentSplitInfoData) -> GtkBox {
-    let current_split = GtkBox::builder()
+pub fn build_selected_segment_info_box(data: &SelectedSegmentInfoData) -> GtkBox {
+    let selected_segment = GtkBox::builder()
         .orientation(gtk4::Orientation::Vertical)
         .build();
 
@@ -104,10 +104,10 @@ pub fn build_current_split_info_box(data: &CurrentSplitInfoData) -> GtkBox {
     comparison_box.append(&comparison_label);
     comparison_box.append(&comparison_value);
 
-    current_split.append(&best_box);
-    current_split.append(&comparison_box);
+    selected_segment.append(&best_box);
+    selected_segment.append(&comparison_box);
 
-    current_split
+    selected_segment
 }
 
 #[cfg(test)]
@@ -225,13 +225,13 @@ mod tests {
     fn build_current_split_info_box_structure_and_texts() {
         gtk_test_init();
 
-        let data = CurrentSplitInfoData {
+        let data = SelectedSegmentInfoData {
             best_value_text: "1:23.45".to_string(),
             comparison_label_text: "PB:".to_string(),
             comparison_value_text: "0:45.67".to_string(),
         };
 
-        let vbox = build_current_split_info_box(&data);
+        let vbox = build_selected_segment_info_box(&data);
 
         // First row: Best
         let best_box_w = vbox.first_child().expect("best box");

@@ -35,7 +35,7 @@ label {
 }
 
 .current-segment {
-    background-color: @accent_bg_color;
+    background-color: alpha(@accent_bg_color, 0.25);
 }
 
 .italic {

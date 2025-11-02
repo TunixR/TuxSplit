@@ -10,6 +10,7 @@ use glib::ControlFlow::Continue;
 use gtk4::{
     Align, Box as GtkBox, CenterBox, Label, ListBox,
     Orientation::{Horizontal, Vertical},
+    SelectionMode,
 };
 
 use livesplit_core::{Timer, TimerPhase};
@@ -52,13 +53,16 @@ impl TimerUI {
         //
         // Splits List
         // =====================
-        let splits = ListBox::new();
-        splits.add_css_class("boxed-list");
+        let segments_list = ListBox::new();
+        segments_list.set_selection_mode(SelectionMode::Single);
+        segments_list.add_css_class("boxed-list");
         let mut config_ref = self.config.write().unwrap();
-        let splits_rows = TimerUI::build_splits_list(&self.timer.read().unwrap(), &mut config_ref);
-        for row in splits_rows {
-            splits.append(&row);
+        let segments_rows =
+            TimerUI::build_splits_list(&self.timer.read().unwrap(), &mut config_ref);
+        for row in segments_rows {
+            segments_list.append(&row);
         }
+        segments_list.unselect_all();
 
         // =====================
         // Current Split + Timer
@@ -68,21 +72,22 @@ impl TimerUI {
             .margin_start(18)
             .margin_end(18)
             .build();
-        center_box.set_start_widget(Some(&TimerUI::build_center_box_current_split_info(
+        center_box.set_start_widget(Some(&TimerUI::build_center_box_selected_segment_info(
             &self.timer.read().unwrap(),
             &mut config_ref,
+            &segments_list,
         )));
         center_box.set_end_widget(Some(&TimerUI::build_center_box_timer(
             &self.timer.read().unwrap(),
             &mut config_ref,
         )));
 
-        let splits_binding = splits.clone();
+        let segments_binding = segments_list.clone();
         let center_box_binding = center_box.clone();
 
         let mut rendered_comparison = self.timer.read().unwrap().current_comparison().to_string();
         let mut rendered_phase = self.timer.read().unwrap().current_phase();
-        let mut render_all_splits = true;
+        let mut render_all_segments = true;
 
         let timer_binding = self.timer.clone();
         let config_binding = self.config.clone();
@@ -91,7 +96,7 @@ impl TimerUI {
             let t = timer_binding.read().unwrap();
             let mut c = config_binding.write().unwrap();
 
-            render_all_splits = (rendered_comparison != t.current_comparison().to_string())
+            render_all_segments = (rendered_comparison != t.current_comparison().to_string())
                 || (rendered_phase != t.current_phase());
             rendered_comparison = t.current_comparison().to_string();
             rendered_phase = t.current_phase();
@@ -100,31 +105,53 @@ impl TimerUI {
             // Splits List
             // =====================
             // Remove all existing rows
-            if render_all_splits {
-                render_all_splits = false;
+            if render_all_segments {
+                render_all_segments = false;
+                segments_binding.set_selection_mode(SelectionMode::Single);
+
+                let mut selected_index: Option<i32> = None;
+
                 // REBUILD ONCE
-                for _ in t.run().segments().iter() {
-                    if let Some(row) = splits_binding.row_at_index(0) {
-                        splits_binding.remove(&row);
+                for (index, _) in t.run().segments().iter().enumerate() {
+                    if let Some(row) = segments_binding.row_at_index(0) {
+                        if row.is_selected() {
+                            selected_index = Some(index as i32);
+                        }
+                        segments_binding.remove(&row);
                     }
                 }
-                // Now rebuild
                 let splits_rows = TimerUI::build_splits_list(&t, &mut c);
                 for row in splits_rows {
-                    splits_binding.append(&row);
+                    segments_binding.append(&row);
+                }
+
+                if t.current_phase().is_ended() {
+                    segments_binding.select_row(
+                        segments_binding
+                            .row_at_index(
+                                selected_index
+                                    .unwrap_or(t.run().segments().len().saturating_sub(1) as i32),
+                            )
+                            .as_ref(),
+                    );
+                } else {
+                    segments_binding.unselect_all();
                 }
             } else if t.current_phase().is_running() {
-                render_all_splits = true;
+                render_all_segments = true;
+                segments_binding.set_selection_mode(SelectionMode::None);
+
                 let opt_current_segment_index = t.current_split_index().unwrap_or(0);
                 let segments = t.run().segments();
 
                 for (index, _) in segments.iter().enumerate() {
-                    if index == opt_current_segment_index
-                        || index == opt_current_segment_index.saturating_sub(1)
-                        || index == opt_current_segment_index.saturating_add(1)
-                    {
-                        if let Some(row) = splits_binding.row_at_index(index as i32) {
-                            splits_binding.remove(&row);
+                    if let Some(row) = segments_binding.row_at_index(index as i32) {
+                        // Set rows as not selectable to avoid interaction during update
+                        if index == opt_current_segment_index
+                            || index == opt_current_segment_index.saturating_sub(1)
+                            || index == opt_current_segment_index.saturating_add(1)
+                        {
+                            segments_binding.remove(&row);
                             let row = widgets::split_row(&data_model::compute_segment_row(
                                 &t,
                                 &mut c,
@@ -132,8 +159,7 @@ impl TimerUI {
                                 index,
                                 &segments[index],
                             ));
-                            row.set_selectable(false);
-                            splits_binding.insert(&row, index as i32);
+                            segments_binding.insert(&row, index as i32);
                         }
                     }
                 }
@@ -143,7 +169,7 @@ impl TimerUI {
             // Current Split + Timer
             // =====================
             center_box_binding.set_start_widget(Some(
-                &TimerUI::build_center_box_current_split_info(&t, &mut c),
+                &TimerUI::build_center_box_selected_segment_info(&t, &mut c, &segments_binding),
             ));
             center_box_binding.set_end_widget(Some(&TimerUI::build_center_box_timer(&t, &mut c)));
 
@@ -154,7 +180,7 @@ impl TimerUI {
         // Assemble everything
         // =====================
         livesplit_gtk.append(&run_info);
-        livesplit_gtk.append(&splits);
+        livesplit_gtk.append(&segments_list);
         livesplit_gtk.append(&center_box);
 
         clamp.set_child(Some(&livesplit_gtk));
@@ -197,15 +223,18 @@ impl TimerUI {
             .into_iter()
             .map(|d| {
                 let row = widgets::split_row(&d);
-                row.set_selectable(false);
                 row
             })
             .collect()
     }
 
-    fn build_center_box_current_split_info(timer: &Timer, config: &mut Config) -> GtkBox {
-        let data = data_model::compute_current_split_info(timer, config);
-        widgets::build_current_split_info_box(&data)
+    fn build_center_box_selected_segment_info(
+        timer: &Timer,
+        config: &mut Config,
+        segments_list: &ListBox,
+    ) -> GtkBox {
+        let data = data_model::compute_selected_segment_info(timer, config, segments_list);
+        widgets::build_selected_segment_info_box(&data)
     }
 
     fn build_center_box_timer(timer: &Timer, config: &mut Config) -> GtkBox {

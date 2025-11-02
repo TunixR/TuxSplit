@@ -1,6 +1,11 @@
 use crate::config::Config;
 use crate::utils::time::{format_segment_time, format_split_time};
 
+use adw::prelude::ActionRowExt;
+use adw::ActionRow;
+use gtk4::prelude::ListBoxRowExt;
+use gtk4::ListBox;
+
 use livesplit_core::{Timer, TimingMethod};
 use time::Duration as TimeDuration;
 
@@ -268,7 +273,7 @@ pub fn classify_split_label(
 
 // New data model for current split info used in center box
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CurrentSplitInfoData {
+pub struct SelectedSegmentInfoData {
     pub best_value_text: String,
     pub comparison_label_text: String,
     pub comparison_value_text: String,
@@ -278,14 +283,28 @@ pub struct CurrentSplitInfoData {
 /// - Best split value for the current segment
 /// - Comparison label (e.g., "PB:")
 /// - Comparison value (per-segment), adjusted by the previous segment's comparison time
-pub fn compute_current_split_info(timer: &Timer, config: &mut Config) -> CurrentSplitInfoData {
+pub fn compute_selected_segment_info(
+    timer: &Timer,
+    config: &mut Config,
+    segments_list: &ListBox,
+) -> SelectedSegmentInfoData {
     let segments = timer.run().segments();
-    let current_index = timer.current_split_index().unwrap_or(0);
-    let current_segment = timer.current_split().unwrap_or(segments.get(0).unwrap());
 
-    let previous_comparison_time = if current_index > 0 {
+    let selected_index = if timer.current_phase().is_running() {
+        timer.current_split_index().unwrap_or(0)
+    } else {
+        // When not running, use the selected segment in the segments list if available
+        segments_list
+            .selected_row()
+            .and_then(|row| row.index().try_into().ok())
+            .unwrap_or(0)
+    };
+
+    let selected_segment = segments.get(selected_index).unwrap();
+
+    let previous_comparison_time = if selected_index > 0 {
         segments
-            .get(current_index - 1)
+            .get(selected_index - 1)
             .unwrap()
             .comparison_timing_method(timer.current_comparison(), timer.current_timing_method())
             .unwrap_or_default()
@@ -294,12 +313,12 @@ pub fn compute_current_split_info(timer: &Timer, config: &mut Config) -> Current
         TimeDuration::ZERO
     };
 
-    let best_value_text = format_split_time(&current_segment.best_segment_time(), &timer, config);
+    let best_value_text = format_split_time(&selected_segment.best_segment_time(), &timer, config);
 
     let comparison_label_text = format!("{}:", config.general.comparison.as_ref().unwrap());
 
     let comparison_value_text = format_segment_time(
-        &current_segment
+        &selected_segment
             .comparison_timing_method(timer.current_comparison(), timer.current_timing_method())
             .unwrap_or_default()
             .to_duration()
@@ -309,7 +328,7 @@ pub fn compute_current_split_info(timer: &Timer, config: &mut Config) -> Current
         config,
     );
 
-    CurrentSplitInfoData {
+    SelectedSegmentInfoData {
         best_value_text,
         comparison_label_text,
         comparison_value_text,
