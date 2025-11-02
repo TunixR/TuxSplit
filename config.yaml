@@ -1,37 +1,37 @@
-general:
-  splits: test_splits/Super_Mario_64_-_16_Star_No_LBLJ_DW_Reds_eab37d1e.lss
-  split-format: Diff
-  comparison: Personal Best
-  timing-method: RealTime
-window:
-  always-on-top: true
-hotkeys:
-  split: Numpad1
-  reset: Numpad3
-  undo: Numpad8
-  skip: Numpad2
-  pause: Numpad5
-  previous_comparison: Numpad4
-  next_comparison: Numpad6
-  format:
-    split:
-      show-hours: true
-      show-minutes: true
-      show-seconds: true
-      show-decimals: true
-      decimal-places: 2
-      dynamic: true
-    timer:
-      show-hours: true
-      show-minutes: true
-      show-seconds: true
-      show-decimals: true
-      decimal-places: 2
-      dynamic: false
-    segment:
-      show-hours: false
-      show-minutes: true
-      show-seconds: true
-      show-decimals: true
-      decimal-places: 2
-      dynamic: true
+# general:
+#   splits: test_splits/Super_Mario_64_-_16_Star_No_LBLJ_DW_Reds_eab37d1e.lss
+#   split-format: Diff
+#   comparison: Personal Best
+#   timing-method: RealTime
+# window:
+#   always-on-top: true
+# hotkeys:
+# split: Numpad1
+# reset: Numpad3
+# undo: Numpad8
+# skip: Numpad2
+# pause: Numpad5
+# previous_comparison: Numpad4
+# next_comparison: Numpad6
+# format:
+#   split:
+#     show-hours: true
+#     show-minutes: true
+#     show-seconds: true
+#     show-decimals: true
+#     decimal-places: 2
+#     dynamic: true
+#   timer:
+#     show-hours: true
+#     show-minutes: true
+#     show-seconds: true
+#     show-decimals: true
+#     decimal-places: 2
+#     dynamic: false
+#   segment:
+#     show-hours: false
+#     show-minutes: true
+#     show-seconds: true
+#     show-decimals: true
+#     decimal-places: 2
+#     dynamic: true
