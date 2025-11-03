@@ -156,6 +156,48 @@ impl TimerUI {
         menu_button.set_menu_model(Some(&menu));
 
         // Load Splits action
+        let load_action = self.get_load_action(parent);
+
+        // Save Splits action
+        let save_action = self.get_save_action();
+
+        // TODO: Config
+        let settings_action = TimerUI::get_settings_action(parent);
+
+        // Keybinds (For now only shows default keybinds)
+        // TODO: Sync with config hotkeys
+        let keybinds_action = TimerUI::get_keybinds_action(parent);
+
+        // About action
+        let about_action = TimerUI::get_about_action(parent);
+
+        let group = gio::SimpleActionGroup::new();
+        group.add_action(&load_action);
+        group.add_action(&save_action);
+        group.add_action(&settings_action);
+        group.add_action(&keybinds_action);
+        group.add_action(&about_action);
+
+        menu_button.insert_action_group("app", Some(&group));
+
+        header.pack_start(&menu_button);
+
+        header
+    }
+
+    fn get_save_action(&self) -> gio::SimpleAction {
+        let save_action = gio::SimpleAction::new("save-splits", None);
+        let timer_for_save = self.timer.clone();
+        let config_for_save = self.config.clone();
+        save_action.connect_activate(move |_, _| {
+            let t = timer_for_save.read().unwrap();
+            let c = config_for_save.read().unwrap();
+            c.save_splits(&t);
+        });
+        save_action
+    }
+
+    fn get_load_action(&self, parent: &ApplicationWindow) -> gio::SimpleAction {
         let load_action = gio::SimpleAction::new("load-splits", None);
         let timer_for_load = self.timer.clone();
         let config_for_load = self.config.clone();
@@ -204,32 +246,10 @@ impl TimerUI {
             file_chooser.set_modal(true);
             file_chooser.present();
         });
+        load_action
+    }
 
-        // Save Splits action
-        let save_action = gio::SimpleAction::new("save-splits", None);
-        let timer_for_save = self.timer.clone();
-        let config_for_save = self.config.clone();
-        save_action.connect_activate(move |_, _| {
-            let t = timer_for_save.read().unwrap();
-            let c = config_for_save.read().unwrap();
-            c.save_splits(&t);
-        });
-
-        // TODO: Config
-        let settings_action = gio::SimpleAction::new("settings", None);
-        let parent_for_settings = parent.clone();
-        settings_action.connect_activate(move |_, _| {
-            let dialog = AlertDialog::builder()
-                .heading("Settings")
-                .body("This feature isn\u{2019}t available yet. Stay tuned!")
-                .default_response("ok")
-                .build();
-            dialog.add_response("ok", "Okay");
-            dialog.present(Some(&parent_for_settings));
-        });
-
-        // Keybinds (For now only shows default keybinds)
-        // TODO: Sync with config hotkeys
+    fn get_keybinds_action(parent: &ApplicationWindow) -> gio::SimpleAction {
         let keybinds_action = gio::SimpleAction::new("keybindings", None);
         let parent_for_keybinds = parent.clone();
         keybinds_action.connect_activate(move |_, _| {
@@ -262,8 +282,25 @@ impl TimerUI {
             dialog.add_response("ok", "Okay");
             dialog.present(Some(&parent_for_keybinds));
         });
+        keybinds_action
+    }
 
-        // About action
+    fn get_settings_action(parent: &ApplicationWindow) -> gio::SimpleAction {
+        let settings_action = gio::SimpleAction::new("settings", None);
+        let parent_for_settings = parent.clone();
+        settings_action.connect_activate(move |_, _| {
+            let dialog = AlertDialog::builder()
+                .heading("Settings")
+                .body("This feature isn\u{2019}t available yet. Stay tuned!")
+                .default_response("ok")
+                .build();
+            dialog.add_response("ok", "Okay");
+            dialog.present(Some(&parent_for_settings));
+        });
+        settings_action
+    }
+
+    fn get_about_action(parent: &ApplicationWindow) -> gio::SimpleAction {
         let about_action = gio::SimpleAction::new("about", None);
         let parent_for_about = parent.clone();
         about_action.connect_activate(move |_, _| {
@@ -276,18 +313,6 @@ impl TimerUI {
                 .build();
             about_dialog.present(Some(&parent_for_about));
         });
-
-        let group = gio::SimpleActionGroup::new();
-        group.add_action(&load_action);
-        group.add_action(&save_action);
-        group.add_action(&settings_action);
-        group.add_action(&keybinds_action);
-        group.add_action(&about_action);
-
-        menu_button.insert_action_group("app", Some(&group));
-
-        header.pack_start(&menu_button);
-
-        header
+        about_action
     }
 }
