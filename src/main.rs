@@ -95,7 +95,7 @@ impl TuxSplit {
         // To ensure changes in config and timer translate
         let timer_binding = self.timer.clone();
         let config_binding = self.config.clone();
-        let timer_ui = TimerUI::new(timer_binding, config_binding);
+        let mut timer_ui = TimerUI::new(timer_binding, config_binding);
 
         let window = timer_ui.build_ui(app);
 

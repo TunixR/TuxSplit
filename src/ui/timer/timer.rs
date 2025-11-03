@@ -1,16 +1,16 @@
 use crate::config::Config;
-use crate::ui::timer::{data_model, widgets};
+use crate::ui::timer::{TimerBody, TimerFooter, TimerHeader};
 
 use core::time::Duration;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use adw::prelude::*;
 use adw::{self, AlertDialog, ApplicationWindow, Clamp, ToolbarView};
 use glib::ControlFlow::Continue;
 use gtk4::{
-    gio, Align, Box as GtkBox, CenterBox, FileChooserDialog, FileFilter, Label, ListBox,
-    Orientation::{Horizontal, Vertical},
-    SelectionMode,
+    gio, Align, Box as GtkBox, FileChooserDialog, FileFilter, Label, ListBox, Orientation::Vertical,
 };
 
 use livesplit_core::Timer;
@@ -19,14 +19,23 @@ use livesplit_core::Timer;
 pub struct TimerUI {
     timer: Arc<RwLock<Timer>>,
     config: Arc<RwLock<Config>>,
+    header: Option<Rc<RefCell<TimerHeader>>>,
+    body: Option<Rc<RefCell<TimerBody>>>,
+    footer: Option<Rc<RefCell<TimerFooter>>>,
 }
 
 impl TimerUI {
-    pub const fn new(timer: Arc<RwLock<Timer>>, config: Arc<RwLock<Config>>) -> Self {
-        Self { timer, config }
+    pub fn new(timer: Arc<RwLock<Timer>>, config: Arc<RwLock<Config>>) -> Self {
+        Self {
+            timer,
+            config,
+            header: None,
+            body: None,
+            footer: None,
+        }
     }
 
-    pub fn build_ui(&self, app: &adw::Application) -> adw::ApplicationWindow {
+    pub fn build_ui(&mut self, app: &adw::Application) -> adw::ApplicationWindow {
         let mut config_ref = self.config.write().unwrap();
 
         // --- Root Clamp ---
@@ -45,153 +54,37 @@ impl TimerUI {
             .build();
 
         // =====================
-        // Run Info Section
+        // Component-based layout
         // =====================
-        let run_info = GtkBox::builder()
-            .orientation(Vertical)
-            .halign(Align::Center)
-            .build();
-        let (run_name, category) = Self::build_run_info(&self.timer.read().unwrap());
-        run_info.append(&run_name);
-        run_info.append(&category);
-
-        //
-        // Splits List
-        // =====================
-        let segments_list = ListBox::builder()
-            .selection_mode(SelectionMode::Single)
-            .css_classes(["boxed-list"])
-            .build();
-        let segments_rows = Self::build_splits_list(&self.timer.read().unwrap(), &mut config_ref);
-        for row in segments_rows {
-            segments_list.append(&row);
-        }
-        segments_list.unselect_all();
-
-        // =====================
-        // Current Split + Timer
-        // =====================
-        let center_box = CenterBox::builder()
-            .orientation(Horizontal)
-            .width_request(300)
-            .build();
-        center_box.set_start_widget(Some(&Self::build_center_box_selected_segment_info(
-            &self.timer.read().unwrap(),
-            &mut config_ref,
-            &segments_list,
-        )));
-        center_box.set_end_widget(Some(&Self::build_center_box_timer(
+        let header_comp = Rc::new(RefCell::new(TimerHeader::new(&self.timer.read().unwrap())));
+        let body_comp = Rc::new(RefCell::new(TimerBody::new(
             &self.timer.read().unwrap(),
             &mut config_ref,
         )));
+        let footer_comp = Rc::new(RefCell::new(TimerFooter::new(
+            &self.timer.read().unwrap(),
+            &mut config_ref,
+            body_comp.borrow().list(),
+        )));
 
-        let run_info_binding = run_info.clone();
-
-        let segments_binding = segments_list.clone();
-        let center_box_binding = center_box.clone();
-
-        let mut rendered_comparison = self.timer.read().unwrap().current_comparison().to_owned();
-        let mut rendered_phase = self.timer.read().unwrap().current_phase();
-        let mut render_all_segments = true;
-        let mut rendered_splits = config_ref.general.splits.clone().unwrap_or_default();
-
+        // =====================
+        // Timeout: update children
+        // =====================
         let timer_binding = self.timer.clone();
         let config_binding = self.config.clone();
-
+        let header_binding = header_comp.clone();
+        let body_binding = body_comp.clone();
+        let footer_binding = footer_comp.clone();
         glib::timeout_add_local(Duration::from_millis(16), move || {
             let t = timer_binding.read().unwrap();
             let mut c = config_binding.write().unwrap();
+            let mut h = header_binding.borrow_mut();
+            let mut b = body_binding.borrow_mut();
+            let mut f = footer_binding.borrow_mut();
 
-            render_all_segments = (rendered_comparison != t.current_comparison())
-                || (rendered_phase != t.current_phase())
-                || (rendered_splits != c.general.splits.clone().unwrap_or_default());
-
-            // Rerender run info if it changes
-            if rendered_splits != c.general.splits.clone().unwrap_or_default() {
-                let (run_name, category) = Self::build_run_info(&t);
-                while let Some(child) = run_info_binding.first_child() {
-                    run_info_binding.remove(&child);
-                }
-                run_info_binding.append(&run_name);
-                run_info_binding.append(&category);
-            }
-
-            // =====================
-            // Splits List
-            // =====================
-            if render_all_segments {
-                render_all_segments = false;
-
-                let mut selected_index: Option<i32> = None;
-
-                // REBUILD ONCE
-                for (index, _) in t.run().segments().iter().enumerate() {
-                    if let Some(row) = segments_binding.row_at_index(index as i32) {
-                        if row.is_selected() {
-                            selected_index = Some(index as i32);
-                        }
-                    }
-                }
-
-                segments_binding.set_selection_mode(SelectionMode::Single);
-                segments_binding.unbind_model();
-
-                let splits_rows = Self::build_splits_list(&t, &mut c);
-                for row in splits_rows {
-                    segments_binding.append(&row);
-                }
-
-                if t.current_phase().is_ended() {
-                    segments_binding.select_row(
-                        segments_binding
-                            .row_at_index(
-                                selected_index
-                                    .unwrap_or(t.run().segments().len().saturating_sub(1) as i32),
-                            )
-                            .as_ref(),
-                    );
-                } else {
-                    segments_binding.unselect_all();
-                }
-            } else if t.current_phase().is_running() {
-                render_all_segments = true;
-                segments_binding.set_selection_mode(SelectionMode::None);
-
-                let opt_current_segment_index = t.current_split_index().unwrap_or(0);
-                let segments = t.run().segments();
-
-                for (index, _) in segments.iter().enumerate() {
-                    if let Some(row) = segments_binding.row_at_index(index as i32) {
-                        // Set rows as not selectable to avoid interaction during update
-                        if index == opt_current_segment_index
-                            || index == opt_current_segment_index.saturating_sub(1)
-                            || index == opt_current_segment_index.saturating_add(1)
-                        {
-                            segments_binding.remove(&row);
-                            let row = widgets::split_row(&data_model::compute_segment_row(
-                                &t,
-                                &mut c,
-                                Some(opt_current_segment_index),
-                                index,
-                                &segments[index],
-                            ));
-                            segments_binding.insert(&row, index as i32);
-                        }
-                    }
-                }
-            }
-
-            // =====================
-            // Current Split + Timer
-            // =====================
-            center_box_binding.set_start_widget(Some(
-                &Self::build_center_box_selected_segment_info(&t, &mut c, &segments_binding),
-            ));
-            center_box_binding.set_end_widget(Some(&Self::build_center_box_timer(&t, &mut c)));
-
-            rendered_comparison = t.current_comparison().to_owned();
-            rendered_phase = t.current_phase();
-            rendered_splits = c.general.splits.clone().unwrap_or_default();
+            h.refresh(&t, &mut c);
+            b.refresh(&t, &mut c);
+            f.refresh(&t, &mut c);
 
             Continue
         });
@@ -199,9 +92,13 @@ impl TimerUI {
         // =====================
         // Assemble everything
         // =====================
-        livesplit_gtk.append(&run_info);
-        livesplit_gtk.append(&segments_list);
-        livesplit_gtk.append(&center_box);
+        self.header.replace(header_comp);
+        self.body.replace(body_comp);
+        self.footer.replace(footer_comp);
+
+        livesplit_gtk.append(self.header.clone().unwrap().borrow().container());
+        livesplit_gtk.append(self.body.clone().unwrap().borrow().container());
+        livesplit_gtk.append(self.footer.clone().unwrap().borrow().container());
 
         clamp.set_child(Some(&livesplit_gtk));
 
@@ -392,37 +289,5 @@ impl TimerUI {
         header.pack_start(&menu_button);
 
         header
-    }
-}
-
-impl TimerUI {
-    fn build_run_info(timer: &Timer) -> (Label, Label) {
-        let run_name = Label::builder().label(timer.run().game_name()).build();
-        run_name.add_css_class("title-2");
-
-        let category = Label::builder().label(timer.run().category_name()).build();
-        category.add_css_class("heading");
-
-        (run_name, category)
-    }
-
-    fn build_splits_list(timer: &Timer, config: &mut Config) -> Vec<adw::ActionRow> {
-        data_model::compute_split_rows(timer, config)
-            .into_iter()
-            .map(|d| widgets::split_row(&d))
-            .collect()
-    }
-
-    fn build_center_box_selected_segment_info(
-        timer: &Timer,
-        config: &mut Config,
-        segments_list: &ListBox,
-    ) -> GtkBox {
-        let data = data_model::compute_selected_segment_info(timer, config, segments_list);
-        widgets::build_selected_segment_info_box(&data)
-    }
-
-    fn build_center_box_timer(timer: &Timer, config: &mut Config) -> GtkBox {
-        widgets::build_timer_box(timer, config)
     }
 }
