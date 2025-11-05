@@ -2,10 +2,13 @@ use crate::config::Config;
 
 use adw::prelude::ActionRowExt as _;
 use adw::ActionRow;
+use glib::clone;
 use gtk4::prelude::*;
-use gtk4::{Align, Box as GtkBox, Label, ListBox, Orientation, SelectionMode};
+use gtk4::{Align, Box as GtkBox, Label, ListBox, Orientation, ScrolledWindow, SelectionMode};
 
 use livesplit_core::{Timer, TimerPhase};
+
+use tracing::debug;
 
 /// The body of the Timer UI:
 ///
@@ -20,7 +23,7 @@ impl TimerBody {
         let container = GtkBox::builder().orientation(Orientation::Vertical).build();
 
         let segment_list = SegmentList::new(timer, config);
-        container.append(segment_list.list());
+        container.append(segment_list.container());
 
         Self {
             container,
@@ -43,6 +46,8 @@ impl TimerBody {
 
 /// Component responsible of rendering, managing, and updating the list of segments/splits.
 pub struct SegmentList {
+    container: GtkBox,
+    scroller: ScrolledWindow,
     list: ListBox,
     rows: Vec<SegmentRow>,
     last_phase: TimerPhase,
@@ -52,12 +57,35 @@ pub struct SegmentList {
 
 impl SegmentList {
     pub fn new(timer: &Timer, config: &mut Config) -> Self {
-        let list = ListBox::builder()
-            .selection_mode(SelectionMode::Single)
-            .css_classes(["boxed-list"])
+        let container = GtkBox::builder()
+            .orientation(Orientation::Vertical)
+            .hexpand(false)
+            .vexpand(false)
+            .spacing(0)
+            .css_classes(["splits-container"])
             .build();
 
+        let height_request = SegmentList::compute_scroller_height(timer, config);
+
+        let scroller = ScrolledWindow::builder()
+            .vexpand(false)
+            .hexpand(false)
+            .min_content_height(SegmentRow::get_natural_height())
+            .height_request(height_request)
+            // .css_classes(["splits-scroll"])
+            .build();
+
+        let list = ListBox::builder()
+            .selection_mode(SelectionMode::Single)
+            .css_classes(["split-boxed-list"])
+            .build();
+
+        container.append(&scroller);
+        scroller.set_child(Some(&list));
+
         let mut this = Self {
+            container,
+            scroller,
             list,
             rows: Vec::new(),
             last_phase: timer.current_phase(),
@@ -68,9 +96,13 @@ impl SegmentList {
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
         };
-        this.rebuild_rows(timer, config);
+        this.build_rows(timer, config);
         this.list.unselect_all();
         this
+    }
+
+    pub fn container(&self) -> &GtkBox {
+        &self.container
     }
 
     pub fn list(&self) -> &ListBox {
@@ -168,6 +200,11 @@ impl SegmentList {
 
     fn rebuild_rows(&mut self, timer: &Timer, config: &mut Config) {
         // Clear GTK children and local row cache
+        self.container.remove(&self.container.last_child().unwrap());
+        self.build_rows(timer, config);
+    }
+
+    fn build_rows(&mut self, timer: &Timer, config: &mut Config) {
         while let Some(child) = self.list.first_child() {
             self.list.remove(&child);
         }
@@ -177,8 +214,47 @@ impl SegmentList {
         let opt_current_segment_index = timer.current_split_index();
         for (index, segment) in timer.run().segments().iter().enumerate() {
             let row = SegmentRow::new(timer, config, opt_current_segment_index, index, segment);
-            self.list.append(row.row());
+            // Last segment will always be visible, so we render it separately
+            if index < timer.run().len() - 1 {
+                self.list.append(row.row());
+            } else {
+                let last_split_list = ListBox::builder()
+                    .selection_mode(SelectionMode::Single)
+                    .css_classes(["last-split-boxed-list"])
+                    .build();
+                last_split_list.append(row.row());
+                self.container.append(&last_split_list);
+                row.row().set_activatable(true);
+
+                // Handle selecting and deselecting manually
+                // let row_clone = row.row().clone();
+                // let list_weak = self.list.downgrade();
+                // row.row().connect_activated(move |_| {
+                //     if let Some(list_ref) = list_weak.upgrade() {
+                //         list_ref.unselect_all();
+                //     }
+                //     row_clone.add_css_class("selected");
+                // });
+                // let row_weak = row.row().downgrade();
+                // self.list.connect_row_selected(move |_, _| {
+                //     if let Some(row_ref) = row_weak.upgrade() {
+                //         row_ref.remove_css_class("selected");
+                //     }
+                // });
+            }
             self.rows.push(row);
+        }
+
+        // Recompute scroller height if splits changed
+        if self.last_splits_key
+            != config
+                .general
+                .splits
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+        {
+            let height_request = SegmentList::compute_scroller_height(timer, config);
+            self.scroller.set_height_request(height_request);
         }
 
         // Refresh caches
@@ -189,6 +265,17 @@ impl SegmentList {
             .splits
             .as_ref()
             .map(|p| p.to_string_lossy().to_string());
+    }
+
+    fn compute_scroller_height(timer: &Timer, config: &mut Config) -> i32 {
+        let segments_requested = config.style.max_segments_displayed.unwrap_or(10);
+
+        let height_request = if segments_requested <= timer.run().len() - 1 {
+            SegmentRow::get_natural_height() * segments_requested as i32
+        } else {
+            SegmentRow::get_natural_height() * (timer.run().len() as i32 - 1)
+        };
+        height_request
     }
 }
 
@@ -367,7 +454,7 @@ impl SegmentRow {
                 .checked_sub(segment_comparison_time)
                 .unwrap_or_default();
 
-            if config.general.split_format == Some(String::from("Time")) {
+            if config.style.split_format == Some(String::from("Time")) {
                 *value_text = config
                     .format
                     .split
@@ -468,6 +555,17 @@ impl SegmentRow {
                 .unwrap_or_default()
                 .to_duration()
         }
+    }
+
+    fn get_natural_height() -> i32 {
+        // We create an action row and measure its natural height
+        let row = ActionRow::builder().title("Test").build();
+        let monospace_label = Label::builder()
+            .label("00:00:00")
+            .css_classes(["timer", "monospace"])
+            .build();
+        row.add_suffix(&monospace_label);
+        row.measure(gtk4::Orientation::Vertical, -1).0 + 5 // Account for padding
     }
 
     fn segment_split_time(segment: &livesplit_core::Segment, timer: &Timer) -> time::Duration {

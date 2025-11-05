@@ -12,10 +12,6 @@ label {
     animation: none;
 }
 
-.current-segment {
-    background-color: alpha(@accent_bg_color, 0.25);
-}
-
 .italic {
     font-style: italic;
 }
@@ -58,4 +54,69 @@ label {
 
 .smalltimer {
     font-size: 18px;
+}
+
+/* CUSTOM STYLES FOR SEGMENT LISTING */
+
+.splits-container {
+    background-clip: padding-box;
+    border-radius: 12px;
+    border: 1px solid @window_bg_color;
+    box-shadow: 0 0 0 1px rgba(0, 0, 6, 0.03) m 0 1px 3px 1px
+        rgba(0, 0, 6, 0.07) 0 2px 6px 2px rgba(0, 0, 6, 0.03);
+}
+
+.split-boxed-list {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+
+.last-split-boxed-list {
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.split-boxed-list,
+.last-split-boxed-list {
+    background-color: @card_bg_color;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.split-boxed-list row:first-child {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+
+.last-split-boxed-list row:last-child {
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+    border-top: 2px solid @window_bg_color;
+}
+
+.last-split-boxed-list row,
+.split-boxed-list row {
+    border-bottom: 1px solid @window_bg_color;
+}
+
+.last-split-boxed-list row.activatable:not(:selected):hover,
+.split-boxed-list row.activatable:not(:selected):hover {
+    background-color: alpha(@card_bg_color, 0.3);
+}
+
+.last-split-boxed-list row.activatable:not(:selected):active,
+.last-split-boxed-list row.activatable.has-open-popup,
+.split-boxed-list row.activatable:not(:selected):active,
+.split-boxed-list row.activatable.has-open-popup {
+    background-color: alpha(@card_bg_color, 0.8);
+}
+
+.last-split-boxed-list row:focus-visible,
+.split-boxed-list row:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: -1px;
+    transition: outline-color 150ms ease;
+}
+
+.current-segment {
+    background-color: alpha(@accent_bg_color, 0.25);
 }

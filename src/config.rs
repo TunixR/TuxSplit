@@ -24,6 +24,8 @@ pub struct Config {
     #[serde(default)]
     window: Window,
     #[serde(default)]
+    pub style: Style,
+    #[serde(default)]
     pub hotkeys: HotkeyConfig,
     #[serde(default)]
     pub format: Format,
@@ -35,10 +37,16 @@ pub struct Config {
 #[serde(rename_all = "kebab-case")]
 pub struct General {
     pub splits: Option<PathBuf>,
-    pub split_format: Option<String>,
     pub timing_method: Option<TimingMethod>,
     pub comparison: Option<String>,
     pub auto_splitter: Option<PathBuf>,
+}
+
+#[derive(Default, Deserialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct Style {
+    pub max_segments_displayed: Option<usize>,
+    pub split_format: Option<String>,
 }
 
 #[derive(Default, Deserialize, Debug, Clone)]
@@ -64,7 +72,6 @@ pub struct Format {
     pub timer: TimeFormat,
     pub segment: TimeFormat,
 }
-
 
 impl Config {
     pub fn parse(path: impl AsRef<Path>) -> Option<Self> {

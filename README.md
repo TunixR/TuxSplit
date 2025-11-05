@@ -73,6 +73,9 @@ Wayland support will be added when consistant support for global hotkeys through
   - [x] Splits list with current segment highlighting
   - [ ] Subsplits
   - [ ] Scrollable list of splits
+    - [x] Adjustable max segments
+    - [ ] Auto-scroll to current split
+    - [x] Fixed last split
   - [ ] Multi-column splits view (name, time, delta, best segment, etc)
   - [ ] Split editor/creator
   - [ ] Drag-and-drop to open splits
