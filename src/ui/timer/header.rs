@@ -49,6 +49,7 @@ impl TimerHeader {
 }
 
 /// RunInfo
+///
 /// Holds and renders:
 /// - Game name (Label with CSS class `title-2`)
 /// - Category (Label with CSS class `heading`)

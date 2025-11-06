@@ -152,8 +152,12 @@ impl SegmentList {
             let follow_from = config.style.segments_scroll_follow_from.unwrap_or(7);
             let y = SegmentRow::get_natural_height() * (cur as i32 + 1 - follow_from as i32);
 
-            if let Some(row) = self.list.row_at_index(cur as i32) {
-                adjustment.set_value(if cur >= follow_from { y as f64 } else { 0.0 });
+            if self.list.row_at_index(cur as i32).is_some() {
+                adjustment.set_value(if cur >= follow_from {
+                    f64::from(y)
+                } else {
+                    0.0
+                });
             }
         } else {
             adjustment.set_value(0.0);
@@ -293,7 +297,7 @@ impl SegmentList {
     fn compute_scroller_height(timer: &Timer, config: &mut Config) -> i32 {
         let segments_requested = config.style.max_segments_displayed.unwrap_or(10);
 
-        let height_request = if segments_requested <= timer.run().len() - 1 {
+        let height_request = if segments_requested < timer.run().len() - 1 {
             SegmentRow::get_natural_height() * segments_requested as i32
         } else {
             SegmentRow::get_natural_height() * (timer.run().len() as i32 - 1)

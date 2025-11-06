@@ -33,6 +33,7 @@ impl Default for TimeFormat {
 }
 
 impl TimeFormat {
+    #[allow(clippy::fn_params_excessive_bools)]
     pub fn new(
         show_hours: bool,
         show_minutes: bool,

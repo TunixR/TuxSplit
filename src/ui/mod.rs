@@ -1,7 +1,7 @@
 pub mod header;
 pub mod timer;
 
-pub use header::{TuxSplitHeader, TuxSplitMenu};
+pub use header::TuxSplitHeader;
 
 // Splits editor/Creator
 pub struct EditorUI {}
