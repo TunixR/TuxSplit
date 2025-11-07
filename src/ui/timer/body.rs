@@ -45,6 +45,10 @@ impl TimerBody {
         self.segment_list.list()
     }
 
+    pub fn last_segment_list(&self) -> &ListBox {
+        self.segment_list.last_segment_list()
+    }
+
     pub fn refresh(&mut self, timer: &Timer, config: &mut Config) {
         self.segment_list.update(timer, config);
     }
@@ -126,6 +130,10 @@ impl SegmentList {
         &self.list
     }
 
+    pub fn last_segment_list(&self) -> &ListBox {
+        &self.last_segment_list
+    }
+
     pub fn update(&mut self, timer: &Timer, config: &mut Config) {
         // Detect structural changes or comparison/splits changes that force a full rebuild.
         let phase = timer.current_phase();
@@ -139,7 +147,7 @@ impl SegmentList {
         let count_changed = self.rows.len() != timer.run().segments().len();
         let phase_changed = self.last_phase != phase;
 
-        let selected_index = self.get_selected_row_index(timer, phase);
+        let selected_index = self.get_selected_row_index();
 
         if comp_changed || splits_changed || count_changed || phase_changed {
             self.rebuild_rows(timer, config);
@@ -193,11 +201,8 @@ impl SegmentList {
         self.scroller.set_vadjustment(Some(&adjustment));
     }
 
-    fn get_selected_row_index(&mut self, timer: &Timer, phase: TimerPhase) -> Option<i32> {
-        self.list
-            .selected_row()
-            .map(|row| row.index())
-            .or_else(None);
+    fn get_selected_row_index(&mut self) -> Option<i32> {
+        self.list.selected_row().map(|row| row.index())
     }
 
     fn update_rows_minimal(&mut self, timer: &Timer, config: &mut Config) {

@@ -13,8 +13,8 @@ use std::sync::{Arc, RwLock};
 
 use core::time::Duration;
 
-use adw::prelude::*;
 use adw::Clamp;
+use adw::prelude::*;
 use gtk4::{Align, Box as GtkBox, Orientation::Vertical};
 
 use livesplit_core::Timer;
@@ -57,6 +57,7 @@ impl TuxSplitTimer {
             &timer.read().unwrap(),
             &mut cfg_write,
             body.borrow().list(),
+            body.borrow().last_segment_list(),
         )));
         drop(cfg_write);
 
