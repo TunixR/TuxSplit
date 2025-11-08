@@ -1,5 +1,7 @@
 use crate::config::Config;
-use livesplit_core::{Timer, comparison::BestSegments};
+use livesplit_core::{Timer, analysis::sum_of_segments::best::calculate as calculate_sob};
+
+use tracing::debug;
 
 pub fn current_attempt_running_duration(timer: &Timer) -> time::Duration {
     use livesplit_core::TimingMethod;
@@ -22,6 +24,20 @@ pub fn current_attempt_running_duration(timer: &Timer) -> time::Duration {
         .unwrap_or_default()
         .checked_sub(loading_times)
         .unwrap_or_default()
+}
+
+pub fn real_time_sob(timer: &Timer) -> time::Duration {
+    let mut predictions = vec![None; timer.run().len() + 1];
+    let predictions = &mut predictions[..];
+    calculate_sob(
+        timer.run().segments(),
+        predictions,
+        false,
+        true,
+        timer.current_timing_method(),
+    )
+    .unwrap_or_default()
+    .to_duration()
 }
 
 pub fn best_segment_duration(segment: &livesplit_core::Segment, timer: &Timer) -> time::Duration {

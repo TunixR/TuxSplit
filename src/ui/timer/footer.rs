@@ -1,6 +1,8 @@
 use crate::config::Config;
 use crate::formatters::label::format_label;
-use crate::ui::info::AdditionalInfo;
+use crate::ui::info::{
+    AdditionalInfo, BestPossibleTimeInfo, PrevSegmentBestInfo, PrevSegmentDiffInfo,
+};
 
 use glib;
 use gtk4::prelude::{BoxExt as _, WidgetExt as _, *};
@@ -83,8 +85,9 @@ pub struct AdditionalInfoFooter {
 impl AdditionalInfoFooter {
     pub fn new(timer: &Timer, config: &mut Config) -> Self {
         let additional_info: Vec<Box<dyn AdditionalInfo>> = vec![
-            Box::new(crate::ui::info::PrevSegmentDiffInfo::new(timer, config)),
-            Box::new(crate::ui::info::PrevSegmentBestInfo::new(timer, config)),
+            Box::new(PrevSegmentDiffInfo::new(timer, config)),
+            Box::new(PrevSegmentBestInfo::new(timer, config)),
+            Box::new(BestPossibleTimeInfo::new(timer, config)),
         ];
 
         // additional_info.push();
@@ -103,6 +106,7 @@ impl AdditionalInfoFooter {
             .orientation(Vertical)
             .halign(Align::Fill)
             .hexpand(true)
+            .spacing(6)
             .build();
 
         for info in &self.additional_info {

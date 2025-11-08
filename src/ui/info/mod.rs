@@ -5,8 +5,6 @@ use gtk4::{CenterBox, Label, Orientation::Horizontal, prelude::WidgetExt};
 
 use livesplit_core::Timer;
 
-use tracing::debug;
-
 pub trait AdditionalInfo {
     fn new(timer: &Timer, config: &mut Config) -> Self
     where
@@ -22,6 +20,12 @@ pub struct PrevSegmentDiffInfo {
 }
 
 pub struct PrevSegmentBestInfo {
+    container: CenterBox,
+    label: Label,
+    value: Label,
+}
+
+pub struct BestPossibleTimeInfo {
     container: CenterBox,
     label: Label,
     value: Label,
@@ -52,6 +56,8 @@ impl AdditionalInfo for PrevSegmentDiffInfo {
     }
 
     fn update(&mut self, timer: &Timer, config: &mut Config) {
+        self.value.set_css_classes(&[]);
+        self.value.set_label("");
         if let Some(mut index) = timer.current_split_index()
             && index > 0
         {
@@ -130,6 +136,8 @@ impl AdditionalInfo for PrevSegmentBestInfo {
     }
 
     fn update(&mut self, timer: &Timer, config: &mut Config) {
+        self.value.set_css_classes(&[]);
+        self.value.set_label("");
         if let Some(mut index) = timer.current_split_index()
             && index > 0
         {
@@ -175,6 +183,80 @@ impl AdditionalInfo for PrevSegmentBestInfo {
             }
         } else {
             self.value.set_label("");
+        }
+    }
+
+    fn container(&self) -> &CenterBox {
+        &self.container
+    }
+}
+
+impl AdditionalInfo for BestPossibleTimeInfo {
+    fn new(timer: &Timer, config: &mut Config) -> Self {
+        let container = CenterBox::builder().orientation(Horizontal).build();
+
+        let label = Label::builder()
+            .label("Best Possible Time:")
+            .css_classes(["heading"])
+            .build();
+        let value = Label::builder().label("").css_classes(["timer"]).build();
+
+        container.set_start_widget(Some(&label));
+        container.set_end_widget(Some(&value));
+
+        let mut res = Self {
+            container,
+            label,
+            value,
+        };
+
+        res.update(timer, config); // Initialize with default timer state
+
+        res
+    }
+
+    fn update(&mut self, timer: &Timer, config: &mut Config) {
+        if timer.current_phase().is_not_running() {
+            self.value.set_label("");
+        } else if timer.current_phase().is_running() || timer.current_phase().is_paused() {
+            let segment = timer.current_split().unwrap_or(timer.run().segment(0));
+
+            let segment_best_duration = segment_best_time(segment, timer);
+
+            // Diff to SOB
+            let diff = current_attempt_running_duration(timer)
+                .checked_sub(segment_best_duration)
+                .unwrap_or_default();
+
+            // We will be adding only diff time to the best possible time when we are behind
+            let live_addition = if diff.is_positive() {
+                diff
+            } else {
+                time::Duration::ZERO
+            };
+
+            let best_possible_time = real_time_sob(timer)
+                .checked_add(live_addition)
+                .unwrap_or_default();
+            if best_possible_time == time::Duration::ZERO {
+                self.value.set_label("");
+            } else {
+                self.value.set_label(
+                    config
+                        .format
+                        .segment
+                        .format_duration(&best_possible_time)
+                        .as_str(),
+                );
+            }
+        } else if timer.current_phase().is_ended() {
+            self.value.set_label(
+                config
+                    .format
+                    .segment
+                    .format_duration(&current_attempt_running_duration(timer))
+                    .as_str(),
+            );
         }
     }
 
