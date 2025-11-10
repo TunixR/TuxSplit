@@ -30,13 +30,10 @@ TuxSplit isn’t bundled yet. You can build it from source:
    $ sudo pacman -S gtk4 libadwaita
    ```
 
-3) Build and run
+3) Install & Run
    ```bash
-   $ cargo run --release
-   ```
-   or build the binary:
-   ```bash
-   $ cargo build --release && ./target/release/tuxsplit
+   $ chmod +x ./install.sh
+   $ tuxsplit
    ```
 
 ## Quick start

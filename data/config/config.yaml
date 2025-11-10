@@ -1,0 +1,58 @@
+# TuxSplit default configuration
+# Notes:
+# - When running as a Flatpak, only sandboxed locations are available.
+#   Don't set absolute paths here unless you know they are accessible.
+# - User config location (preferred):
+#     $XDG_CONFIG_HOME/tuxsplit/config.yaml
+#     (usually ~/.config/tuxsplit/config.yaml)
+# - System-wide fallback (outside Flatpak):
+#     /etc/xdg/tuxsplit/config.yaml
+# - If no config is found, this built-in default is used.
+
+general:
+  # Use "RealTime" or "GameTime"
+  timing-method: RealTime
+
+  # Default comparison. Common values include "Personal Best", "Average Segments", etc.
+  comparison: "Personal Best"
+
+  # Path to your splits (.lss). Leave commented to select at runtime.
+  # splits: "/path/to/your/splits.lss"
+
+  # Path to an auto-splitter script, if supported and available in sandbox.
+  # auto-splitter: "/path/to/auto_splitter.asl"
+
+# Window-related options
+window:
+  # Keep window always on top of other windows
+  always-on-top: false
+
+# Visual style options
+style:
+  # Maximum number of segments displayed in the list at once
+  max-segments-displayed: 10
+
+  # Start following/auto-scroll from this visible index (0-based)
+  segments-scroll-follow-from: 6
+# Time format options use reasonable defaults if omitted.
+# They can be configured interactively in Settings and saved later.
+# format:
+#   timer:
+#     show-decimals: true
+#     dynamic: false
+#     decimal-places: 2
+#   split:
+#     show-decimals: true
+#     dynamic: true
+#     decimal-places: 2
+#   segment:
+#     show-decimals: true
+#     dynamic: false
+#     decimal-places: 2
+
+# Hotkey configuration inherits LiveSplit Core defaults when omitted.
+# hotkeys: {}
+
+# Reserved for future integrations
+# connections:
+#   twitch: ""

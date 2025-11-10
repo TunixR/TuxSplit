@@ -3,18 +3,31 @@ mod formatters;
 mod ui;
 mod utils;
 
-use std::sync::{Arc, RwLock};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
+};
 
 use livesplit_core::{HotkeySystem, Timer, auto_splitting::Runtime};
 use tracing::info;
 
 use adw::prelude::*;
 use adw::{Application, ApplicationWindow, ToolbarView};
-use gtk4::{CssProvider, gdk::Display};
+use gtk4::{
+    CssProvider,
+    gdk::Display,
+    gio::{self, Resource},
+};
 
 use config::Config;
 use ui::TuxSplitHeader;
 use ui::timer::TuxSplitTimer;
+
+const RESOURCE_PREFIX: &str = "/org/lunixruntools/tuxsplit";
+const RESOURCE_ICONS: &str = "/org/lunixruntools/tuxsplit/icons";
+const RESOURCE_CSS: &str = "/org/lunixruntools/tuxsplit/css/tuxsplit.css";
+const RESOURCE_CONFIG_DEFAULT: &str = "/org/lunixruntools/tuxsplit/config/config.yaml";
 
 fn main() {
     unsafe {
@@ -26,7 +39,8 @@ fn main() {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    info!("Staring UnixSplix!!");
+    register_gresource();
+    info!("Starting TuxSplit");
     adw::init().expect("Failed to initialize libadwaita");
 
     let app = Application::builder()
@@ -60,7 +74,7 @@ impl TuxSplit {
     ///
     /// Will panic if the timer or hotkey system cannot be created.
     pub fn new() -> Self {
-        let config = Config::parse("config.yaml").unwrap_or_default();
+        let config = load_config();
         let run = config.parse_run_or_default();
 
         let timer = Timer::new(run).expect("Failed to create timer");
@@ -84,24 +98,34 @@ impl TuxSplit {
         }
     }
 
-    fn load_css() {
-        let provider = CssProvider::new();
-        provider.load_from_path("data/css/tuxsplit.css");
+    fn load_styles() {
+        if let Some(resources_file) = find_in_xdg_dirs("tuxsplit.gresource")
+            && resources_file.is_file()
+        {
+            info!("Registered GResource from {}", resources_file.display());
+            let res = gio::Resource::load(resources_file)
+                .expect("Could not load GResource from XDG_DATA_DIRS");
+            gio::resources_register(&res);
+        } else {
+            panic!("Could not load resources");
+        }
+
         let display = Display::default().expect("Could not connect to a display");
+        let css_provider = CssProvider::new();
+        css_provider.load_from_resource(RESOURCE_CSS);
+
+        let display_theme = gtk4::IconTheme::for_display(&display);
+        display_theme.add_resource_path(RESOURCE_ICONS);
+
         gtk4::style_context_add_provider_for_display(
             &display,
-            &provider,
+            &css_provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
-
-        // Load gtk icon theme
-        let icon_theme = gtk4::IconTheme::default();
-        icon_theme.add_resource_path("/data/icons");
-        icon_theme.set_display(Some(&display));
     }
 
     fn build_ui(&mut self, app: &Application) {
-        Self::load_css();
+        Self::load_styles();
 
         let window: ApplicationWindow = ApplicationWindow::builder()
             .application(app)
@@ -119,4 +143,50 @@ impl TuxSplit {
         window.set_content(Some(&toolbar_view));
         window.present();
     }
+}
+
+fn register_gresource() {
+    if let Some(resources_file) = find_in_xdg_dirs("tuxsplit.gresource")
+        && resources_file.is_file()
+    {
+        info!("Registered GResource from {}", resources_file.display());
+        let res = gio::Resource::load(resources_file)
+            .expect("Could not load GResource from XDG_DATA_DIRS");
+        gio::resources_register(&res);
+    } else {
+        panic!("Could not load resources");
+    }
+}
+
+fn load_config() -> Config {
+    if let Ok(path_str) = env::var("TUXSPLIT_CONFIG") {
+        let path = PathBuf::from(&path_str);
+        if path.is_file()
+            && let Some(cfg) = Config::parse(&path)
+        {
+            info!("Loaded config from TUXSPLIT_CONFIG ({})", path.display());
+            return cfg;
+        }
+    }
+
+    if let Some(user_cfg) = find_in_xdg_dirs("config/config.yaml")
+        && user_cfg.is_file()
+        && let Some(cfg) = Config::parse(&user_cfg)
+    {
+        info!("Loaded user config {}", user_cfg.display());
+        return cfg;
+    }
+
+    Config::default()
+}
+
+fn find_in_xdg_dirs(file: &str) -> Option<PathBuf> {
+    let base_dirs = env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share".to_string());
+    for dir in base_dirs.split(':') {
+        let candidate = Path::new(dir).join(format!("tuxsplit/{file}"));
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }

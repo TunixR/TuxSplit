@@ -54,7 +54,7 @@ impl TimerPreferencesDialog {
     fn build_general_page(&self) -> PreferencesPage {
         let page = PreferencesPage::builder()
             .title("General")
-            .icon_name("cogged-wheel-symbolic")
+            .icon_name("gears-symbolic")
             .build();
 
         let timing_group = PreferencesGroup::builder().title("Timing").build();
@@ -69,7 +69,7 @@ impl TimerPreferencesDialog {
     fn build_style_page(&self) -> PreferencesPage {
         let page = PreferencesPage::builder()
             .title("Style")
-            .icon_name("paintbrush-symbolic")
+            .icon_name("large-brush-symbolic")
             .build();
 
         let segments_group = PreferencesGroup::builder().title("Segments").build();
@@ -122,7 +122,7 @@ impl TimerPreferencesDialog {
     fn build_format_page(&self) -> PreferencesPage {
         let page = PreferencesPage::builder()
             .title("Format")
-            .icon_name("preferences-system-time")
+            .icon_name("headings-symbolic")
             .build();
 
         let formats_group = PreferencesGroup::builder().title("Time Formats").build();

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/lunixruntools/tuxsplit">
+    <file>css/tuxsplit.css</file>
+    <file>config/config.yaml</file>
+  </gresource>
+  <gresource prefix="/org/lunixruntools/tuxsplit/icons/scalable/actions">
+    <file alias="gears-symbolic.svg">icons/scalable/actions/gears-symbolic.svg</file>
+    <file alias="large-brush-symbolic.svg">icons/scalable/actions/large-brush-symbolic.svg</file>
+    <file alias="headings-symbolic.svg">icons/scalable/actions/headings-symbolic.svg</file>
+  </gresource>
+</gresources>
