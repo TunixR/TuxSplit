@@ -14,6 +14,7 @@ enum FormatTarget {
     Timer,
     Split,
     Segment,
+    Comparison,
 }
 
 pub struct TimerPreferencesDialog {
@@ -148,6 +149,13 @@ impl TimerPreferencesDialog {
         );
         formats_group.add(&segment_expander);
 
+        let comparison_expander = self.build_format_expander(
+            "Comparison Format",
+            "Controls formatting of the per-segment comparison value.",
+            FormatTarget::Comparison,
+        );
+        formats_group.add(&comparison_expander);
+
         page.add(&formats_group);
         page
     }
@@ -208,6 +216,7 @@ impl TimerPreferencesDialog {
                 FormatTarget::Timer => &cfg.format.timer,
                 FormatTarget::Split => &cfg.format.split,
                 FormatTarget::Segment => &cfg.format.segment,
+                FormatTarget::Comparison => &cfg.format.comparison,
             };
             let mode = if tf.show_decimals {
                 u32::from(tf.dynamic)
@@ -242,6 +251,7 @@ impl TimerPreferencesDialog {
                 FormatTarget::Timer => &mut cfg.format.timer,
                 FormatTarget::Split => &mut cfg.format.split,
                 FormatTarget::Segment => &mut cfg.format.segment,
+                FormatTarget::Comparison => &mut cfg.format.comparison,
             };
             match idx {
                 0 => {
@@ -272,6 +282,7 @@ impl TimerPreferencesDialog {
                 FormatTarget::Timer => &mut cfg.format.timer,
                 FormatTarget::Split => &mut cfg.format.split,
                 FormatTarget::Segment => &mut cfg.format.segment,
+                FormatTarget::Comparison => &mut cfg.format.comparison,
             };
             tf.set_decimal_places(val);
         });

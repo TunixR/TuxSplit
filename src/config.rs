@@ -78,6 +78,7 @@ pub struct Format {
     pub split: TimeFormat,
     pub timer: TimeFormat,
     pub segment: TimeFormat,
+    pub comparison: TimeFormat,
 }
 
 impl Default for Format {
@@ -86,6 +87,7 @@ impl Default for Format {
             split: TimeFormat::from_preset(TimeFormatPreset::SmartDecimals),
             timer: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
             segment: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
+            comparison: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
         }
     }
 }

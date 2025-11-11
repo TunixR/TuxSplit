@@ -212,7 +212,7 @@ impl SegmentComparison {
 
         let comparison_label_text = format!("{}:", format_label(timer.current_comparison()));
 
-        let comparison_value_text = config.format.segment.format_segment_time(
+        let comparison_value_text = config.format.comparison.format_segment_time(
             &segment
                 .comparison_timing_method(timer.current_comparison(), timer.current_timing_method())
                 .unwrap_or_default()
