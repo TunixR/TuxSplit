@@ -17,17 +17,15 @@ use adw::{Application, ApplicationWindow, ToolbarView};
 use gtk4::{
     CssProvider,
     gdk::Display,
-    gio::{self, Resource},
+    gio::{self},
 };
 
 use config::Config;
 use ui::TuxSplitHeader;
 use ui::timer::TuxSplitTimer;
 
-const RESOURCE_PREFIX: &str = "/com/tunixr/tuxsplit";
 const RESOURCE_ICONS: &str = "/com/tunixr/tuxsplit/icons";
 const RESOURCE_CSS: &str = "/com/tunixr/tuxsplit/css/tuxsplit.css";
-const RESOURCE_CONFIG_DEFAULT: &str = "/com/tunixr/tuxsplit/config/config.yaml";
 
 fn main() {
     unsafe {
@@ -44,14 +42,23 @@ fn main() {
     adw::init().expect("Failed to initialize libadwaita");
 
     let app = Application::builder()
-        .application_id("com.tunixr.tuxsplit-beta")
+        .application_id("com.tunixr.tuxsplit")
         .build();
 
     let app_state = Arc::new(RwLock::new(TuxSplit::new()));
 
-    app.connect_activate(move |app| {
-        app_state.write().unwrap().build_ui(app);
-    });
+    {
+        let state_binding = app_state.clone();
+        app.connect_activate(move |app| {
+            state_binding.write().unwrap().build_ui(app);
+        });
+    }
+    {
+        let state_binding = app_state.clone();
+        app.connect_shutdown(move |_| {
+            state_binding.read().unwrap().shutdown();
+        });
+    }
     app.run();
 }
 
@@ -132,34 +139,37 @@ impl TuxSplit {
         window.set_content(Some(&toolbar_view));
         window.present();
     }
+
+    fn shutdown(&self) {
+        info!("Shutting down TuxSplit");
+        let cfg = self.config.read().unwrap();
+        // let timer = self.timer.read().unwrap();
+        cfg.save(get_config_path().join("config.yaml"))
+            .expect("Failed to save config on shutdown");
+    }
 }
 
 fn register_gresource() {
-    if let Some(resources_file) = find_in_xdg_dirs("tuxsplit.gresource")
-        && resources_file.is_file()
-    {
-        info!("Registered GResource from {}", resources_file.display());
-        let res = gio::Resource::load(resources_file)
-            .expect("Could not load GResource from XDG_DATA_DIRS");
+    let path = Path::new("/app/share/tuxsplit.gresource");
+    if path.exists() {
+        let res = gio::Resource::load(path).expect("Failed to load resource");
+        info!("Registered GResource from {}", path.display());
         gio::resources_register(&res);
-    } else {
-        panic!("Could not load resources");
+        return;
     }
+    let usr_path = Path::new("/usr/share/tuxsplit/tuxsplit.gresource");
+    if usr_path.exists() {
+        let res = gio::Resource::load(usr_path).expect("Failed to load resource");
+        info!("Registered GResource from {}", usr_path.display());
+        gio::resources_register(&res);
+        return;
+    }
+    panic!("Could not load resources");
 }
 
 fn load_config() -> Config {
-    if let Ok(path_str) = env::var("TUXSPLIT_CONFIG") {
-        let path = PathBuf::from(&path_str);
-        if path.is_file()
-            && let Some(cfg) = Config::parse(&path)
-        {
-            info!("Loaded config from TUXSPLIT_CONFIG ({})", path.display());
-            return cfg;
-        }
-    }
-
-    if let Some(user_cfg) = find_in_xdg_dirs("config/config.yaml")
-        && user_cfg.is_file()
+    let user_cfg = get_config_path().join("config.yaml");
+    if user_cfg.is_file()
         && let Some(cfg) = Config::parse(&user_cfg)
     {
         info!("Loaded user config {}", user_cfg.display());
@@ -169,13 +179,18 @@ fn load_config() -> Config {
     Config::default()
 }
 
-fn find_in_xdg_dirs(file: &str) -> Option<PathBuf> {
-    let base_dirs = env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share".to_string());
-    for dir in base_dirs.split(':') {
-        let candidate = Path::new(dir).join(format!("tuxsplit/{file}"));
-        if candidate.is_file() {
-            return Some(candidate);
+fn get_config_path() -> PathBuf {
+    if let Ok(path_str) = env::var("TUXSPLIT_DATADIR") {
+        PathBuf::from(&path_str)
+    } else if let Ok(path_str) = env::var("XDG_CONFIG_HOME") {
+        path_str.into()
+    } else if let Ok(home) = env::var("HOME") {
+        let path = PathBuf::from(home).join(".config").join("tuxsplit");
+        if !path.is_dir() {
+            std::fs::create_dir_all(&path).expect("Failed to create config directory");
         }
+        path
+    } else {
+        PathBuf::from("/tmp")
     }
-    None
 }

@@ -1,5 +1,5 @@
 {
-  "app_id": "com.tunixr.tuxsplit-beta",
+  "app_id": "com.tunixr.tuxsplit",
   "runtime": "org.gnome.Platform",
   "runtime-version": "49",
   "sdk": "org.gnome.Sdk",
@@ -37,12 +37,12 @@
         "meson compile -C build",
         "meson install -C build",
         "mkdir -p /app/share/applications",
-        "cat > /app/share/applications/com.tunixr.tuxsplit-beta.desktop <<'EOF'\n[Desktop Entry]\nName=TuxSplit\nComment=Speedrun timer for LiveSplit splits\nExec=tuxsplit\nTerminal=false\nType=Application\nCategories=Game;Utility;\nStartupNotify=true\nEOF"
+        "cat > /app/share/applications/com.tunixr.tuxsplit.desktop <<'EOF'\n[Desktop Entry]\nName=TuxSplit\nComment=Speedrun timer for LiveSplit splits\nExec=tuxsplit\nTerminal=false\nType=Application\nCategories=Game;Utility;\nStartupNotify=true\nEOF"
       ],
       "sources": [
         {
           "type": "git",
-          "url": "https://github.com/TunixR/tuxsplit.git",
+          "url": "https://github.com/TunixR/TuxSplit.git ",
           "branch": "main"
         }
       ]

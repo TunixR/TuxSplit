@@ -22,7 +22,7 @@ tuxsplit_resources = custom_target(
   ],
   build_by_default : true,
   install : true,
-  install_dir : join_paths(get_option('datadir'), 'tuxsplit')
+  install_dir : join_paths(get_option('datadir'))
 )
 
 # Move the prebuilt cargo binary to the appropriate location
@@ -31,11 +31,4 @@ install_data(
   cargo_bin_path,
   install_dir : get_option('bindir'),
   install_tag : 'runtime'
-)
-
-# Default config
-install_data(
-  'data/config/config.yaml',
-  install_dir : join_paths(get_option('datadir'), 'tuxsplit', 'config'),
-  install_tag : 'data'
 )

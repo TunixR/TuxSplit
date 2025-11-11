@@ -1,9 +1,9 @@
 use livesplit_core::{TimeSpan, Timer, TimingMethod};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use time::Duration as TimeDuration;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 #[allow(clippy::struct_excessive_bools)]

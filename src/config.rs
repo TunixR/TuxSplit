@@ -8,14 +8,14 @@ use livesplit_core::{
     HotkeyConfig, HotkeySystem, Run, Segment, SharedTimer, Timer, TimingMethod, auto_splitting,
     run::{parser::composite, saver::livesplit::save_timer},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use tracing::error;
 
-#[derive(Default, Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
@@ -32,7 +32,7 @@ pub struct Config {
     connections: Connections,
 }
 
-#[derive(Default, Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct General {
     pub splits: Option<PathBuf>,
@@ -41,7 +41,7 @@ pub struct General {
     pub auto_splitter: Option<PathBuf>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Style {
     pub max_segments_displayed: Option<usize>,
@@ -57,21 +57,21 @@ impl Default for Style {
     }
 }
 
-#[derive(Default, Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 struct Window {
     always_on_top: bool,
 }
 
-#[derive(Default, Deserialize, Debug, Clone)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 struct Connections {
     twitch: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Format {
@@ -96,6 +96,12 @@ impl Config {
     pub fn parse(path: impl AsRef<Path>) -> Option<Self> {
         let buf = fs::read(path).ok()?;
         serde_yaml::from_slice(&buf).ok()
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
+        let buf = serde_yaml::to_string(self).unwrap();
+        fs::write(path, buf)?;
+        Ok(())
     }
 
     pub fn parse_run(&self) -> Option<Run> {
