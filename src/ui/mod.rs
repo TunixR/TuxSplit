@@ -1,3 +1,4 @@
+pub mod editor;
 pub mod header;
 pub mod info;
 pub mod menu;

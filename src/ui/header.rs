@@ -9,6 +9,7 @@ use gtk4::{
 use livesplit_core::Timer;
 
 use crate::config::Config;
+use crate::ui::editor::SplitEditor;
 use crate::ui::menu::TimerPreferencesDialog;
 
 /// `TuxSplitHeader`
@@ -59,6 +60,7 @@ impl TuxSplitMenu {
         let splits_section = gio::Menu::new();
         splits_section.append(Some("Load Splits"), Some("app.load-splits"));
         splits_section.append(Some("Save Splits"), Some("app.save-splits"));
+        splits_section.append(Some("Edit Splits"), Some("app.edit-splits"));
 
         let settings_section = gio::Menu::new();
         settings_section.append(Some("Settings"), Some("app.settings"));
@@ -80,6 +82,7 @@ impl TuxSplitMenu {
             config.clone(),
         ));
         group.add_action(&Self::get_save_action(timer.clone(), config.clone()));
+        group.add_action(&Self::get_edit_action(timer.clone(), config.clone()));
         group.add_action(&Self::get_settings_action(
             parent,
             timer.clone(),
@@ -105,6 +108,18 @@ impl TuxSplitMenu {
             let t = timer.read().unwrap();
             let c = config.read().unwrap();
             c.save_splits(&t);
+        });
+        action
+    }
+
+    fn get_edit_action(
+        timer: Arc<RwLock<Timer>>,
+        config: Arc<RwLock<Config>>,
+    ) -> gio::SimpleAction {
+        let action = gio::SimpleAction::new("edit-splits", None);
+        action.connect_activate(move |_, _| {
+            let editor = SplitEditor::new(timer.clone(), config.clone());
+            editor.present();
         });
         action
     }
