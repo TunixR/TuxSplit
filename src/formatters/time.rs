@@ -327,8 +327,58 @@ impl TimeFormat {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct TimeParseError;
+
+impl std::fmt::Display for TimeParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Could not parse to time duration")
+    }
+}
+
+pub fn parse_hms(input: &str) -> Result<TimeDuration, TimeParseError> {
+    // h:m:s.sss...
+    let mut parts = input.split(':');
+
+    let h = parts.next().ok_or(TimeParseError)?;
+    let m = parts.next().ok_or(TimeParseError)?;
+    let s = parts.next().ok_or(TimeParseError)?;
+
+    // seconds part must contain decimals
+    let (s_whole, s_frac) = s.split_once('.').ok_or(TimeParseError)?;
+    if s_frac.is_empty() {
+        return Err(TimeParseError);
+    }
+
+    let hours: u64 = h.parse().map_err(|_| TimeParseError)?;
+    let mins: u64 = m.parse().map_err(|_| TimeParseError)?;
+    let secs: u64 = s_whole.parse().map_err(|_| TimeParseError)?;
+
+    if hours >= 60 || mins >= 60 || secs >= 60 {
+        return Err(TimeParseError);
+    }
+
+    // fractional seconds → nanos
+    // We support arbitrary length; scale to nanoseconds.
+    let mut frac_str = s_frac.to_string();
+    let len = frac_str.len();
+    if len > 9 {
+        // truncate to nanosecond precision
+        frac_str.truncate(9);
+    } else if len < 9 {
+        // pad to nanoseconds
+        frac_str.push_str(&"0".repeat(9 - len));
+    }
+
+    let nanos: u64 = frac_str.parse().map_err(|_| TimeParseError)?;
+
+    let total_secs = hours * 3600 + mins * 60 + secs;
+
+    Ok(TimeDuration::new(total_secs as i64, nanos as i32))
+}
+
 #[cfg(test)]
-mod tests {
+mod format_tests {
     use super::TimeFormat;
     use livesplit_core::TimeSpan;
 
@@ -531,5 +581,50 @@ mod tests {
         assert_eq!(tf.format_duration_opt(None), "--");
         let d = time::Duration::seconds(10);
         assert_eq!(tf.format_duration_opt(Some(d)), "10.00");
+    }
+}
+
+mod parse_tests {
+    use super::{TimeParseError, parse_hms};
+    use time::Duration as TimeDuration;
+
+    #[test]
+    fn test_basic() {
+        let d = parse_hms("1:2:3.5").unwrap();
+        assert_eq!(d.whole_seconds(), 1 * 3600 + 2 * 60 + 3);
+        assert_eq!(d.subsec_nanoseconds(), 500_000_000);
+    }
+
+    #[test]
+    fn test_three_decimals() {
+        let d = parse_hms("0:0:10.123").unwrap();
+        assert_eq!(d.whole_seconds(), 10);
+        assert_eq!(d.subsec_nanoseconds(), 123_000_000);
+    }
+
+    #[test]
+    fn test_many_decimals_truncate() {
+        let d = parse_hms("0:0:1.123456789999").unwrap();
+        assert_eq!(d.whole_seconds(), 1);
+        assert_eq!(d.subsec_nanoseconds(), 123_456_789);
+    }
+
+    #[test]
+    fn test_invalid_format() {
+        assert_eq!(parse_hms("1:2").err(), Some(TimeParseError));
+        assert_eq!(parse_hms("1:2:3").err(), Some(TimeParseError));
+        assert_eq!(parse_hms("1:2:3.").err(), Some(TimeParseError));
+    }
+
+    #[test]
+    fn test_out_of_range() {
+        assert_eq!(parse_hms("60:0:0.1").err(), Some(TimeParseError));
+        assert_eq!(parse_hms("0:60:0.1").err(), Some(TimeParseError));
+        assert_eq!(parse_hms("0:0:60.1").err(), Some(TimeParseError));
+    }
+
+    #[test]
+    fn test_parse_int_error() {
+        assert_eq!(parse_hms("x:0:1.1").err(), Some(TimeParseError));
     }
 }
