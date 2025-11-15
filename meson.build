@@ -8,7 +8,6 @@ project(
 )
 
 # Build resources and copy them to the appropriate location
-gnome = import('gnome')
 glib_compile_resources = find_program('glib-compile-resources', required : true)
 tuxsplit_resources = custom_target(
   'tuxsplit-resources',

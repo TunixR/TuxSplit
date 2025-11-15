@@ -42,7 +42,7 @@ fn main() {
     adw::init().expect("Failed to initialize libadwaita");
 
     let app = Application::builder()
-        .application_id("com.tunixr.tuxsplit")
+        .application_id("io.github.tunixr.tuxsplit")
         .build();
 
     let app_state = Arc::new(RwLock::new(TuxSplit::new()));
