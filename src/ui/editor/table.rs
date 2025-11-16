@@ -203,6 +203,9 @@ impl SegmentsEditor {
                 && let Ok(row) = item.downcast::<SegmentRow>()
             {
                 entry.set_text(&row.segment_time());
+                row.bind_property("segment-time", &entry, "text")
+                    .flags(glib::BindingFlags::SYNC_CREATE)
+                    .build();
             }
         });
         col.set_factory(Some(&factory));
@@ -236,6 +239,9 @@ impl SegmentsEditor {
                 && let Ok(row) = item.downcast::<SegmentRow>()
             {
                 entry.set_text(&row.best());
+                row.bind_property("best", &entry, "text")
+                    .flags(glib::BindingFlags::SYNC_CREATE)
+                    .build();
             }
         });
         col.set_factory(Some(&factory));
