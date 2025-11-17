@@ -14,7 +14,6 @@ pub struct SegmentsEditor {
     table: ColumnView,
     model: gtk4::SingleSelection,
     timer: Arc<RwLock<Timer>>,
-    run_snapshot: Run, // Snapshot of the timer at the moment of opening the editor
     timing_method: Arc<RwLock<TimingMethod>>,
     context: EditorContext,
     segments_model: SegmentsModel,
@@ -23,7 +22,6 @@ pub struct SegmentsEditor {
 impl SegmentsEditor {
     pub fn new(context: EditorContext) -> Rc<Self> {
         let timer = context.timer();
-        let run_snapshot = timer.read().unwrap().run().clone();
         let timing_method = Arc::new(RwLock::new(TimingMethod::RealTime));
 
         let segments_model = SegmentsModel::new();
@@ -33,14 +31,13 @@ impl SegmentsEditor {
 
         let table = ColumnView::builder()
             .reorderable(false)
-            .vscroll_policy(gtk4::ScrollablePolicy::Natural)
             .css_classes(["table"])
             .build();
 
         context.set_timing_method(TimingMethod::RealTime);
 
         let scroller = ScrolledWindow::builder()
-            .css_classes(["no-background"])
+            .css_classes(["no-background", "rounded-corners"])
             .kinetic_scrolling(true)
             .hexpand(true)
             .hscrollbar_policy(gtk4::PolicyType::Never)
@@ -60,7 +57,6 @@ impl SegmentsEditor {
             table,
             model,
             timer,
-            run_snapshot,
             timing_method,
             context,
             segments_model,
@@ -78,14 +74,6 @@ impl SegmentsEditor {
 
     pub fn container(&self) -> &GtkBox {
         &self.container
-    }
-
-    pub fn cancel_changes(&self) -> Option<()> {
-        self.timer
-            .write()
-            .unwrap()
-            .set_run(self.run_snapshot.clone())
-            .ok()
     }
 
     fn setup_columns(self: &Rc<SegmentsEditor>) {
@@ -533,44 +521,6 @@ mod tests {
         Time::new()
             .with_real_time(Some(TimeSpan::from_seconds(rt_secs as f64)))
             .with_game_time(Some(TimeSpan::from_seconds(gt_secs as f64)))
-    }
-
-    #[gtk4::test]
-    fn cancel_changes_restores_snapshot() {
-        gtk_test_init();
-        // Initial run snapshot
-        let mut run = Run::new();
-        run.set_game_name("Game");
-        run.set_category_name("Any%");
-        run.push_segment(Segment::new("S1"));
-        let timer = make_timer_with_run(run);
-
-        // Build editor (takes snapshot internally)
-        let context = EditorContext::new(Arc::clone(&timer), None);
-        let editor = SegmentsEditor::new(context);
-
-        // Mutate the timer's run
-        {
-            let mut t = timer.write().unwrap();
-            let mut mutated = t.run().clone();
-            mutated.set_game_name("Changed");
-            mutated.set_category_name("ChangedCat");
-            mutated.push_segment(Segment::new("S2"));
-            t.set_run(mutated).expect("set mutated run");
-        }
-
-        // Cancel changes -> should restore to the original snapshot
-        {
-            let editor2 = Rc::clone(&editor);
-            editor2.cancel_changes().expect("cancel to succeed");
-        }
-
-        // Assert restored
-        let t = timer.read().unwrap();
-        assert_eq!(t.run().game_name(), "Game");
-        assert_eq!(t.run().category_name(), "Any%");
-        assert_eq!(t.run().segments().len(), 1);
-        assert_eq!(t.run().segments()[0].name(), "S1");
     }
 
     #[gtk4::test]

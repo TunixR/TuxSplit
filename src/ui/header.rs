@@ -126,7 +126,7 @@ impl TuxSplitMenu {
         action.connect_activate(move |_, _| {
             let editor = SplitEditor::new(timer.clone(), ctx_binding.clone());
 
-            temporary_keybinds_disable(config_binding.clone(), editor.dialog());
+            // temporary_keybinds_disable(config_binding.clone(), editor.dialog());
 
             editor.present();
         });
