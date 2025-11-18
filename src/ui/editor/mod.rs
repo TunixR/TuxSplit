@@ -9,7 +9,7 @@ pub use model::SegmentsModel;
 use crate::context::TuxSplitContext;
 use crate::ui::editor::table::SegmentsEditor;
 use gtk4::{ActionBar, StringList};
-use livesplit_core::{Run, TimeSpan, Timer};
+use livesplit_core::{Run, TimeSpan};
 use std::sync::{Arc, RwLock};
 
 use adw::prelude::*;
@@ -21,26 +21,23 @@ use adw::{
 #[derive(Clone)]
 pub struct SplitEditor {
     dialog: ToolbarView,
-    timer: Arc<RwLock<Timer>>,
     run_snapshot: Arc<RwLock<Run>>,
-    ctx: Arc<TuxSplitContext>,
 }
 
 impl SplitEditor {
-    pub fn new(timer: Arc<RwLock<Timer>>, ctx: Arc<TuxSplitContext>) -> Self {
+    pub fn new() -> Self {
+        let ctx = TuxSplitContext::get_instance();
+
         let dialog = ToolbarView::new();
 
         let run_snapshot = {
-            let timer_read = timer.read().unwrap();
-            let snapshot = timer_read.run().clone();
-            Arc::new(RwLock::new(snapshot))
+            let run = ctx.get_run();
+            Arc::new(RwLock::new(run))
         };
 
         let this = Self {
             dialog,
-            timer,
             run_snapshot,
-            ctx,
         };
 
         let run_info = this.build_run_info_page();
@@ -71,7 +68,7 @@ impl SplitEditor {
 
         // Call show Cancel/save on run-changed
         let action_bar_binding = action_bar.clone();
-        this.ctx.connect_local("run-changed", false, move |_| {
+        ctx.connect_local("run-changed", false, move |_| {
             if !action_bar_binding.is_revealed() {
                 // cancel will trigger run-changed
                 action_bar_binding.set_revealed(true);
@@ -116,29 +113,20 @@ impl SplitEditor {
             .build();
 
         // Connect save button
-        let timer_binding = Arc::clone(&self.timer);
         let snapshot_binding = self.run_snapshot.clone();
         let action_bar_binding = action_bar.clone();
         save_button.connect_clicked(move |_| {
-            let t = timer_binding.read().unwrap();
             if let Ok(mut snapshot) = snapshot_binding.try_write() {
-                *snapshot = t.run().clone();
+                *snapshot = TuxSplitContext::get_instance().get_run();
             }
             action_bar_binding.set_revealed(false);
         });
 
         // Connect cancel button
         let snapshot_binding = Arc::clone(&self.run_snapshot);
-        let timer_binding = Arc::clone(&self.timer);
         let action_bar_binding = action_bar.clone();
-        let context_binding = self.ctx.clone();
         cancel_button.connect_clicked(move |_| {
-            let t = timer_binding.try_write();
-            if let Ok(mut timer) = t {
-                let snapshot = snapshot_binding.read().unwrap();
-                assert!(timer.set_run(snapshot.clone()).is_ok());
-            }
-            context_binding.emit_by_name::<()>("run-changed", &[]);
+            TuxSplitContext::get_instance().set_run(snapshot_binding.read().unwrap().clone());
             action_bar_binding.set_revealed(false);
         });
 
@@ -169,46 +157,37 @@ impl SplitEditor {
             .description("General run information details")
             .build();
 
-        let timer = self.timer.read().unwrap();
         let name = EntryRow::builder()
             .title("Game Name")
-            .text(timer.run().game_name())
+            .text(self.run_snapshot.read().unwrap().game_name())
             .build();
         let category = EntryRow::builder()
             .title("Category")
-            .text(timer.run().category_name())
+            .text(self.run_snapshot.read().unwrap().category_name())
             .build();
 
         {
-            let timer_binding = Arc::clone(&self.timer);
-            let context_binding = self.ctx.clone();
             name.connect_text_notify(move |entry| {
                 let new_name = entry.text().to_string();
+                let ctx = TuxSplitContext::get_instance();
 
-                let mut timer = timer_binding.write().unwrap();
-                let mut run = timer.run().clone();
+                let mut run = ctx.get_run();
 
                 run.set_game_name(new_name);
-                assert!(timer.set_run(run).is_ok());
 
-                drop(timer);
-                context_binding.emit_by_name::<()>("run-changed", &[]);
+                ctx.set_run(run);
             });
         }
         {
-            let timer_binding = Arc::clone(&self.timer);
-            let context_binding = self.ctx.clone();
             category.connect_text_notify(move |entry| {
                 let new_category = entry.text().to_string();
+                let ctx = TuxSplitContext::get_instance();
 
-                let mut timer = timer_binding.write().unwrap();
-                let mut run = timer.run().clone();
+                let mut run = ctx.get_run();
 
                 run.set_category_name(new_category);
-                assert!(timer.set_run(run).is_ok());
 
-                drop(timer);
-                context_binding.emit_by_name::<()>("run-changed", &[]);
+                ctx.set_run(run);
             });
         }
 
@@ -219,25 +198,28 @@ impl SplitEditor {
     }
 
     fn build_timer_preferences(&self) -> PreferencesGroup {
+        let ctx = TuxSplitContext::get_instance();
+        let timer = {
+            let shared = ctx.timer();
+            shared.read().unwrap().clone()
+        };
+        let current_method_index = match timer.current_timing_method() {
+            livesplit_core::TimingMethod::GameTime => 1,
+            _ => 0,
+        };
+
         let group = PreferencesGroup::builder()
             .title("Timer")
             .description("Run timing configuration")
             .build();
 
         let options = StringList::new(&["Real Time", "Game Time"]);
-        let initial_method = {
-            let timer = self.timer.read().unwrap();
-            match timer.current_timing_method() {
-                livesplit_core::TimingMethod::GameTime => 1,
-                _ => 0,
-            }
-        };
+        let initial_method = current_method_index;
 
-        let timer = self.timer.read().unwrap();
-
+        let offset_str = format!("{:3}", timer.run().offset().total_seconds(),);
         let offset = EntryRow::builder()
             .title("Start at")
-            .text(format!("{:3}", timer.run().offset().total_seconds(),))
+            .text(offset_str)
             .build();
         let timing_method = ComboRow::builder()
             .title("Timing Method")
@@ -245,8 +227,6 @@ impl SplitEditor {
             .selected(initial_method)
             .build();
 
-        let timer_binding = Arc::clone(&self.timer);
-        let context_binding = self.ctx.clone();
         offset.connect_text_notify(move |entry| {
             // Offset must be a valid f64 value
             if entry.text().parse::<f64>().is_ok() {
@@ -254,33 +234,31 @@ impl SplitEditor {
                 entry.remove_css_class("error");
                 let new_offset = entry.text().parse::<f64>().unwrap();
 
-                let mut timer = timer_binding.write().unwrap();
-                let mut run = timer.run().clone();
+                let ctx = TuxSplitContext::get_instance();
+                let mut run = ctx.get_run();
 
                 run.set_offset(TimeSpan::from_seconds(new_offset));
-                assert!(timer.set_run(run).is_ok());
 
-                drop(timer);
-                context_binding.emit_by_name::<()>("run-changed", &[]);
+                ctx.set_run(run);
             } else {
                 entry.set_title("Start at (entry must be a valid number)");
                 entry.add_css_class("error");
             }
         });
 
-        let timer_binding = Arc::clone(&self.timer);
-        let context_binding = self.ctx.clone();
         timing_method.connect_selected_notify(move |r| {
-            let idx = r.selected();
-            let mut t = timer_binding.write().unwrap();
-            match idx {
-                0 => t.set_current_timing_method(livesplit_core::TimingMethod::RealTime),
-                1 => t.set_current_timing_method(livesplit_core::TimingMethod::GameTime),
-                _ => (),
-            }
+            let ctx = TuxSplitContext::get_instance();
 
-            drop(t);
-            context_binding.emit_by_name::<()>("run-changed", &[]);
+            let idx = r.selected();
+            if let Ok(mut t) = ctx.timer().try_write() {
+                match idx {
+                    0 => t.set_current_timing_method(livesplit_core::TimingMethod::RealTime),
+                    1 => t.set_current_timing_method(livesplit_core::TimingMethod::GameTime),
+                    _ => (),
+                }
+                drop(t);
+                ctx.emit_by_name::<()>("run-changed", &[]);
+            }
         });
 
         group.add(&offset);
@@ -302,7 +280,7 @@ impl SplitEditor {
             .description("Edit your run segments")
             .build();
 
-        let editor_ctx = EditorContext::new(self.timer.clone(), Some(self.ctx.clone()));
+        let editor_ctx = EditorContext::new();
         let segment_editor = SegmentsEditor::new(editor_ctx);
         group.add(segment_editor.container());
 

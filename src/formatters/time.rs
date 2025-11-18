@@ -163,7 +163,7 @@ impl TimeFormat {
         pattern
     }
 
-    pub fn format_time_span_opt(&mut self, span: Option<TimeSpan>) -> String {
+    pub fn format_time_span_opt(&self, span: Option<TimeSpan>) -> String {
         match span {
             Some(s) => self.format_time_span(&s),
             None => "--".to_owned(),
@@ -188,7 +188,7 @@ impl TimeFormat {
     ///
     /// Notes:
     /// - Negative values are prefixed with "-".
-    pub fn format_time_span(&mut self, span: &TimeSpan) -> String {
+    pub fn format_time_span(&self, span: &TimeSpan) -> String {
         // Determine sign and absolute time in milliseconds
         let total_ms = span.total_milliseconds();
         let abs_ms = total_ms.abs() as i64;
@@ -198,7 +198,7 @@ impl TimeFormat {
         let seconds = (abs_ms / 1_000) % 60;
         let millis = abs_ms % 1_000;
 
-        let pattern = self.get_pattern(Some(abs_ms));
+        let pattern = self.compute_pattern(Some(abs_ms));
 
         let mut out = String::new();
 
@@ -239,7 +239,7 @@ impl TimeFormat {
     /// Formats a split `Time` (which may contain both Real Time and Game Time) into a string.
     /// The caller decides whether to use game time or real time via `use_game_time`.
     pub fn format_split_time(
-        &mut self,
+        &self,
         time: &livesplit_core::Time,
         timing_method: TimingMethod,
     ) -> String {
@@ -253,7 +253,7 @@ impl TimeFormat {
     }
 
     /// Formats the overall timer's current attempt duration into a string using this format.
-    pub fn format_timer(&mut self, timer: &Timer) -> String {
+    pub fn format_timer(&self, timer: &Timer) -> String {
         let dur = timer
             .current_attempt_duration()
             .to_duration()
@@ -276,17 +276,17 @@ impl TimeFormat {
     }
 
     /// Formats a segment duration.
-    pub fn format_segment_time(&mut self, duration: &TimeDuration) -> String {
+    pub fn format_segment_time(&self, duration: &TimeDuration) -> String {
         self.format_duration(duration)
     }
 
     /// Formats a `time::Duration` using the same pattern machinery by converting to `TimeSpan`.
-    pub fn format_duration(&mut self, duration: &TimeDuration) -> String {
+    pub fn format_duration(&self, duration: &TimeDuration) -> String {
         let span = TimeSpan::from_milliseconds(duration.whole_nanoseconds() as f64 / 1_000_000.0);
         self.format_time_span(&span)
     }
 
-    pub fn format_duration_opt(&mut self, duration: Option<TimeDuration>) -> String {
+    pub fn format_duration_opt(&self, duration: Option<TimeDuration>) -> String {
         match duration {
             Some(d) => self.format_duration(&d),
             None => "--".to_owned(),
@@ -508,44 +508,44 @@ mod format_tests {
     #[test]
     fn format_time_span_basic() {
         let t = TimeSpan::from_milliseconds(3_145.0); // 00:00:03.145
-        let mut tf_s = make_tf(false, false, true, 0); // "s"
+        let tf_s = make_tf(false, false, true, 0); // "s"
         assert_eq!(tf_s.format_time_span(&t), "3");
-        let mut tf_sd = make_tf(false, false, true, 1); // "s.d"
+        let tf_sd = make_tf(false, false, true, 1); // "s.d"
         assert_eq!(tf_sd.format_time_span(&t), "3.1");
-        let mut tf_sdd = make_tf(false, false, true, 2); // "s.dd"
+        let tf_sdd = make_tf(false, false, true, 2); // "s.dd"
         assert_eq!(tf_sdd.format_time_span(&t), "3.14");
-        let mut tf_sddd = make_tf(false, false, true, 3); // "s.ddd"
+        let tf_sddd = make_tf(false, false, true, 3); // "s.ddd"
         assert_eq!(tf_sddd.format_time_span(&t), "3.145");
     }
 
     #[test]
     fn format_time_span_minutes_seconds() {
         let t = TimeSpan::from_milliseconds(125_340.0); // 00:02:05.340
-        let mut tf_ms = make_tf(false, true, true, 0); // "m:s"
+        let tf_ms = make_tf(false, true, true, 0); // "m:s"
         assert_eq!(tf_ms.format_time_span(&t), "2:05");
-        let mut tf_msdd = make_tf(false, true, true, 2); // "m:s.dd"
+        let tf_msdd = make_tf(false, true, true, 2); // "m:s.dd"
         assert_eq!(tf_msdd.format_time_span(&t), "2:05.34");
     }
 
     #[test]
     fn format_time_span_hours_minutes_seconds() {
         let t = TimeSpan::from_milliseconds(3_845_999.0); // 01:04:05.999
-        let mut tf_hms = make_tf(true, true, true, 0); // "h:m:s"
+        let tf_hms = make_tf(true, true, true, 0); // "h:m:s"
         assert_eq!(tf_hms.format_time_span(&t), "1:04:05");
-        let mut tf_hmsddd = make_tf(true, true, true, 3); // "h:m:s.ddd"
+        let tf_hmsddd = make_tf(true, true, true, 3); // "h:m:s.ddd"
         assert_eq!(tf_hmsddd.format_time_span(&t), "1:04:05.999");
     }
 
     #[test]
     fn format_time_span_negative() {
         let t = TimeSpan::from_milliseconds(-61_230.0); // -00:01:01.230
-        let mut tf_msdd = make_tf(false, true, true, 2); // "m:s.dd"
+        let tf_msdd = make_tf(false, true, true, 2); // "m:s.dd"
         assert_eq!(tf_msdd.format_time_span(&t), "1:01.23");
     }
 
     #[test]
     fn format_time_span_option() {
-        let mut tf_ms = make_tf(false, true, true, 0); // "m:s"
+        let tf_ms = make_tf(false, true, true, 0); // "m:s"
         assert_eq!(tf_ms.format_time_span_opt(None), "--");
         let t = TimeSpan::from_milliseconds(10_000.0);
         assert_eq!(tf_ms.format_time_span(&t), "10");
@@ -554,34 +554,34 @@ mod format_tests {
     #[test]
     fn format_duration_basic() {
         let d = time::Duration::milliseconds(3_145);
-        let mut tf = make_tf(false, false, true, 2); // "s.dd"
+        let tf = make_tf(false, false, true, 2); // "s.dd"
         assert_eq!(tf.format_duration(&d), "3.14");
     }
 
     #[test]
     fn format_duration_min_sec() {
         let d = time::Duration::milliseconds(125_340);
-        let mut tf = make_tf(false, true, true, 2); // "m:s.dd"
+        let tf = make_tf(false, true, true, 2); // "m:s.dd"
         assert_eq!(tf.format_duration(&d), "2:05.34");
     }
 
     #[test]
     fn format_duration_hours() {
         let d = time::Duration::milliseconds(3_845_999);
-        let mut tf = make_tf(true, true, true, 2); // "h:m:s.dd"
+        let tf = make_tf(true, true, true, 2); // "h:m:s.dd"
         assert_eq!(tf.format_duration(&d), "1:04:05.99");
     }
 
     #[test]
     fn format_duration_negative() {
         let d = time::Duration::milliseconds(-61_230);
-        let mut tf = make_tf(false, true, true, 2); // "m:s.dd"
+        let tf = make_tf(false, true, true, 2); // "m:s.dd"
         assert_eq!(tf.format_duration(&d), "1:01.23");
     }
 
     #[test]
     fn format_duration_option() {
-        let mut tf = make_tf(false, false, true, 2); // "s.dd"
+        let tf = make_tf(false, false, true, 2); // "s.dd"
         assert_eq!(tf.format_duration_opt(None), "--");
         let d = time::Duration::seconds(10);
         assert_eq!(tf.format_duration_opt(Some(d)), "10.00");

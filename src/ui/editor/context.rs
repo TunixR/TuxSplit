@@ -16,32 +16,21 @@ pub enum SegmentMoveDirection {
 
 mod imp {
     use super::{
-        Arc, Cell, DerivedObjectProperties, ObjectImpl, ObjectImplExt, ObjectSubclass, OnceLock,
-        Properties, RefCell, RwLock, Signal, Timer, TimingMethod,
+        Cell, DerivedObjectProperties, ObjectImpl, ObjectImplExt, ObjectSubclass, OnceLock,
+        Properties, Signal, TimingMethod,
     };
-    use crate::context::TuxSplitContext;
 
     #[derive(Properties)]
     #[properties(wrapper_type = super::EditorContext)]
     pub struct EditorContext {
-        // Shared timer instance set by EditorContext::new(...)
-        pub timer: RefCell<Arc<RwLock<Timer>>>,
         // Timing method used for edits: 0 = RealTime, 1 = GameTime
         pub timing_method: Cell<i32>,
-        // Global application context used to emit a central run-changed signal
-        pub global_ctx: RefCell<Option<Arc<TuxSplitContext>>>,
     }
 
     impl Default for EditorContext {
         fn default() -> Self {
-            let mut run = livesplit_core::Run::new();
-            let segment = livesplit_core::Segment::new("Segment");
-            run.push_segment(segment);
-            let timer = Timer::new(run).expect("Failed to create default Timer");
             Self {
-                timer: RefCell::new(Arc::new(RwLock::new(timer))),
                 timing_method: Cell::new(0), // Default to RealTime
-                global_ctx: RefCell::new(None),
             }
         }
     }
@@ -97,16 +86,9 @@ glib::wrapper! {
 
 impl EditorContext {
     /// Construct a new `EditorContext` bound to the provided Timer.
-    pub fn new(timer: Arc<RwLock<Timer>>, global: Option<Arc<TuxSplitContext>>) -> Self {
+    pub fn new() -> Self {
         let obj: Self = glib::Object::new();
-        obj.imp().timer.replace(timer);
-        obj.imp().global_ctx.replace(global);
         obj
-    }
-
-    /// Returns a clone of the shared timer handle.
-    pub fn timer(&self) -> Arc<RwLock<Timer>> {
-        self.imp().timer.borrow().clone()
     }
 
     /// Gets the current timing method used for edits.
@@ -130,9 +112,8 @@ impl EditorContext {
 
     /// Emits the global context's "run-changed" signal if one is attached.
     fn emit_global_run_changed(&self) {
-        if let Some(ctx) = self.imp().global_ctx.borrow().as_ref() {
-            ctx.emit_run_changed();
-        }
+        let ctx = TuxSplitContext::get_instance();
+        ctx.emit_run_changed();
     }
 
     /// Sets the segment name at `index`. Returns true if the operation succeeded.
@@ -140,22 +121,17 @@ impl EditorContext {
     /// Mirrors the existing behavior in table.rs: clones the run, mutates it,
     /// then sets it back on the timer.
     pub fn set_segment_name(&self, index: usize, name: String) {
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run = timer.run().clone();
+        let mut run = ctx.get_run();
         if index >= run.segments().len() {
             return;
         }
 
         run.segments_mut()[index].set_name(name);
-        assert!(timer.set_run(run).is_ok());
-        drop(timer);
+        ctx.set_run(run);
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     /// Sets the split time at `index` in milliseconds for the current timing method.
@@ -167,12 +143,9 @@ impl EditorContext {
             return;
         }
 
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run_editor = RunEditor::new(timer.run().to_owned()).ok().unwrap();
+        let mut run_editor = RunEditor::new(ctx.get_run()).ok().unwrap();
         if index >= run_editor.run().segments().len() {
             return;
         }
@@ -185,11 +158,9 @@ impl EditorContext {
         );
         run_editor.unselect(index);
 
-        assert!(timer.set_run(run_editor.close()).is_ok());
-        drop(timer);
+        ctx.set_run(run_editor.close());
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     /// Sets the segment time at `index` in milliseconds for the current timing method.
@@ -201,12 +172,9 @@ impl EditorContext {
             return;
         }
 
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run_editor = RunEditor::new(timer.run().to_owned()).ok().unwrap();
+        let mut run_editor = RunEditor::new(ctx.get_run().to_owned()).ok().unwrap();
         if index >= run_editor.run().segments().len() {
             return;
         }
@@ -218,11 +186,9 @@ impl EditorContext {
             .set_segment_time(Some(TimeSpan::from_milliseconds(ms as f64)));
         run_editor.unselect(index);
 
-        assert!(timer.set_run(run_editor.close()).is_ok());
-        drop(timer);
+        ctx.set_run(run_editor.close());
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     /// Sets the best segment time at `index` in milliseconds for the current timing method.
@@ -234,12 +200,9 @@ impl EditorContext {
             return;
         }
 
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run = timer.run().clone();
+        let mut run = ctx.get_run();
         if index >= run.segments().len() {
             return;
         }
@@ -250,23 +213,16 @@ impl EditorContext {
             .best_segment_time_mut()
             .with_timing_method(method, Some(TimeSpan::from_milliseconds(ms as f64)));
 
-        assert!(timer.set_run(run).is_ok());
-        drop(timer);
+        ctx.set_run(run);
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     /// Moves a given segment up/down by one position.
     pub fn move_segment(&self, index: usize, direction: SegmentMoveDirection) {
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let run = timer.run().clone();
-
-        let mut run_editor = RunEditor::new(run).ok().unwrap();
+        let mut run_editor = RunEditor::new(ctx.get_run().to_owned()).ok().unwrap();
         run_editor.select_only(index);
 
         match direction {
@@ -286,20 +242,15 @@ impl EditorContext {
             }
         }
 
-        assert!(timer.set_run(run_editor.close()).is_ok());
-        drop(timer);
+        ctx.set_run(run_editor.close());
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     pub fn add_segment(&self, index: usize, direction: SegmentMoveDirection) {
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run_editor = RunEditor::new(timer.run().to_owned()).ok().unwrap();
+        let mut run_editor = RunEditor::new(ctx.get_run().to_owned()).ok().unwrap();
         run_editor.select_only(index);
 
         match direction {
@@ -311,20 +262,15 @@ impl EditorContext {
             }
         }
 
-        assert!(timer.set_run(run_editor.close()).is_ok());
-        drop(timer);
+        ctx.set_run(run_editor.close());
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 
     pub fn remove_segment(&self, index: usize) {
-        let maybe_timer = self.timer();
-        let Ok(mut timer) = maybe_timer.try_write() else {
-            return;
-        };
+        let ctx = TuxSplitContext::get_instance();
 
-        let mut run_editor = RunEditor::new(timer.run().to_owned()).ok().unwrap();
+        let mut run_editor = RunEditor::new(ctx.get_run()).ok().unwrap();
         run_editor.select_only(index);
 
         if run_editor.can_remove_segments() {
@@ -333,11 +279,9 @@ impl EditorContext {
             return;
         }
 
-        assert!(timer.set_run(run_editor.close()).is_ok());
-        drop(timer);
+        ctx.set_run(run_editor.close());
 
         self.emit_run_changed();
-        self.emit_global_run_changed();
     }
 }
 
@@ -359,7 +303,7 @@ mod tests {
     #[test]
     fn timing_method_signal_emitted_only_on_change() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer, None);
+        let ctx = EditorContext::new();
 
         let counter = Rc::new(Cell::new(0));
         let c2 = counter.clone();
@@ -388,7 +332,7 @@ mod tests {
     #[test]
     fn set_segment_name_valid_and_out_of_bounds() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer.clone(), None);
+        let ctx = EditorContext::new();
 
         let run_changed = Rc::new(Cell::new(0));
         let r2 = run_changed.clone();
@@ -417,7 +361,7 @@ mod tests {
     #[test]
     fn split_time_setter_handles_negative_and_updates_rt_only() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer.clone(), None);
+        let ctx = EditorContext::new();
 
         // Negative should be ignored
         ctx.set_split_time_ms(0, -10);
@@ -471,7 +415,7 @@ mod tests {
     #[test]
     fn segment_time_setter_handles_negative_and_updates_selected_method() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer.clone(), None);
+        let ctx = EditorContext::new();
 
         // Negative ignored
         ctx.set_segment_time_ms(0, -5);
@@ -494,7 +438,7 @@ mod tests {
     #[test]
     fn best_time_setter_handles_negative_out_of_bounds_and_updates_method() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer.clone(), None);
+        let ctx = EditorContext::new();
 
         // Negative ignored
         ctx.set_best_time_ms(0, -1);
@@ -535,7 +479,7 @@ mod tests {
     #[test]
     fn run_changed_signal_emitted_on_successful_mutations_only() {
         let timer = make_timer_with_segments(&["A"]);
-        let ctx = EditorContext::new(timer, None);
+        let ctx = EditorContext::new();
 
         let count = Rc::new(Cell::new(0));
         let c2 = count.clone();

@@ -2,14 +2,12 @@ pub mod body;
 pub mod footer;
 pub mod header;
 
-use crate::config::Config;
 use crate::ui::timer::body::TimerBody;
 use crate::ui::timer::footer::TimerFooter;
 use crate::ui::timer::header::TimerHeader;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
 
 use core::time::Duration;
 
@@ -18,11 +16,8 @@ use adw::prelude::*;
 use gtk4::{Align, Box as GtkBox, Orientation::Vertical};
 
 use crate::context::TuxSplitContext;
-use livesplit_core::Timer;
 
 pub struct TuxSplitTimer {
-    timer: Arc<RwLock<Timer>>,
-    config: Arc<RwLock<Config>>,
     clamp: Clamp,
     header: Rc<RefCell<TimerHeader>>,
     body: Rc<RefCell<TimerBody>>,
@@ -32,11 +27,7 @@ pub struct TuxSplitTimer {
 
 impl TuxSplitTimer {
     /// Create the timer widget (header/body/footer composed) but does NOT start refresh loop.
-    pub fn new(
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-        ctx: Arc<TuxSplitContext>,
-    ) -> Self {
+    pub fn new() -> Self {
         let clamp = Clamp::builder().maximum_size(900).build();
 
         let container = GtkBox::builder()
@@ -51,20 +42,20 @@ impl TuxSplitTimer {
             .spacing(20)
             .build();
 
-        let header = Rc::new(RefCell::new(TimerHeader::new(&timer.read().unwrap())));
+        let ctx = TuxSplitContext::get_instance();
+        let timer_arc = ctx.timer();
+        let timer_read = timer_arc.read().unwrap();
+        let header = Rc::new(RefCell::new(TimerHeader::new(&timer_read)));
 
-        let mut cfg_write = config.write().unwrap();
-        let body = Rc::new(RefCell::new(TimerBody::new(
-            &timer.read().unwrap(),
-            &mut cfg_write,
-        )));
+        let cfg = ctx.config();
+        let body = Rc::new(RefCell::new(TimerBody::new(&timer_read, &cfg)));
         let footer = Rc::new(RefCell::new(TimerFooter::new(
-            &timer.read().unwrap(),
-            &mut cfg_write,
+            &timer_read,
+            &cfg,
             body.borrow().list(),
             body.borrow().last_segment_list(),
         )));
-        drop(cfg_write);
+        drop(timer_read);
 
         container.append(header.borrow().container());
         container.append(body.borrow().container());
@@ -74,21 +65,20 @@ impl TuxSplitTimer {
 
         {
             // Connect global run-changed to force a rebuild of segment rows.
-            let ctx_binding = ctx.clone();
-            let timer_binding = timer.clone();
-            let config_binding = config.clone();
             let body_binding = body.clone();
-            ctx_binding.connect_local("run-changed", false, move |_| {
-                let t = timer_binding.read().unwrap();
-                let mut c = config_binding.write().unwrap();
-                body_binding.borrow_mut().refresh(&t, &mut c, true);
+            TuxSplitContext::get_instance().connect_local("run-changed", false, move |_| {
+                let ctx = TuxSplitContext::get_instance();
+                let t = {
+                    let shared = ctx.timer();
+                    shared.read().unwrap().clone()
+                };
+                let c = ctx.config();
+                body_binding.borrow_mut().refresh(&t, &c, true);
                 None
             });
         }
 
         Self {
-            timer,
-            config,
             clamp,
             header,
             body,
@@ -106,19 +96,21 @@ impl TuxSplitTimer {
             return; // Already running
         }
 
-        let timer_binding = self.timer.clone();
-        let config_binding = self.config.clone();
         let header_binding = self.header.clone();
         let body_binding = self.body.clone();
         let footer_binding = self.footer.clone();
 
         let source_id = glib::timeout_add_local(Duration::from_millis(16), move || {
-            let t = timer_binding.read().unwrap();
-            let mut c = config_binding.write().unwrap();
+            let ctx = TuxSplitContext::get_instance();
+            let t = {
+                let shared = ctx.timer();
+                shared.read().unwrap().clone()
+            };
 
-            header_binding.borrow_mut().refresh(&t, &mut c);
-            body_binding.borrow_mut().refresh(&t, &mut c, false);
-            footer_binding.borrow_mut().refresh(&t, &mut c);
+            let c = ctx.config();
+            header_binding.borrow_mut().refresh(&t);
+            body_binding.borrow_mut().refresh(&t, &c, false);
+            footer_binding.borrow_mut().refresh(&t, &c);
 
             glib::ControlFlow::Continue
         });

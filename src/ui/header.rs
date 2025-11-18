@@ -1,14 +1,10 @@
-use std::sync::{Arc, RwLock};
-
 use adw::{self, AboutDialog, AlertDialog};
 use adw::{PreferencesDialog, prelude::*};
 use gtk4::{
     Align, Box as GtkBox, FileChooserDialog, FileFilter, Label, ListBox, MenuButton,
     Orientation::Vertical, gio,
 };
-use livesplit_core::Timer;
 
-use crate::config::Config;
 use crate::context::TuxSplitContext;
 use crate::ui::editor::SplitEditor;
 use crate::ui::menu::TimerPreferencesDialog;
@@ -21,17 +17,12 @@ pub struct TuxSplitHeader {
 }
 
 impl TuxSplitHeader {
-    pub fn new(
-        parent: &adw::ApplicationWindow,
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-        ctx: Arc<TuxSplitContext>,
-    ) -> Self {
+    pub fn new(parent: &adw::ApplicationWindow) -> Self {
         let header = adw::HeaderBar::builder()
             .show_end_title_buttons(true)
             .build();
 
-        let menu = TuxSplitMenu::new(parent, timer, config, ctx);
+        let menu = TuxSplitMenu::new(parent);
         header.pack_start(menu.button());
 
         Self { header, menu }
@@ -48,12 +39,7 @@ pub struct TuxSplitMenu {
 
 #[allow(clippy::needless_pass_by_value)]
 impl TuxSplitMenu {
-    pub fn new(
-        parent: &adw::ApplicationWindow,
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-        ctx: Arc<TuxSplitContext>,
-    ) -> Self {
+    pub fn new(parent: &adw::ApplicationWindow) -> Self {
         let button = MenuButton::builder()
             .icon_name("open-menu-symbolic")
             .build();
@@ -79,18 +65,10 @@ impl TuxSplitMenu {
 
         // Actions
         let group = gio::SimpleActionGroup::new();
-        group.add_action(&Self::get_load_action(parent, config.clone(), ctx.clone()));
-        group.add_action(&Self::get_save_action(timer.clone(), config.clone()));
-        group.add_action(&Self::get_edit_action(
-            timer.clone(),
-            config.clone(),
-            ctx.clone(),
-        ));
-        group.add_action(&Self::get_settings_action(
-            parent,
-            timer.clone(),
-            config.clone(),
-        ));
+        group.add_action(&Self::get_load_action(parent));
+        group.add_action(&Self::get_save_action());
+        group.add_action(&Self::get_edit_action());
+        group.add_action(&Self::get_settings_action(parent));
         group.add_action(&Self::get_keybinds_action(parent));
         group.add_action(&Self::get_about_action(parent));
         button.insert_action_group("app", Some(&group));
@@ -102,29 +80,23 @@ impl TuxSplitMenu {
         &self.button
     }
 
-    fn get_save_action(
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-    ) -> gio::SimpleAction {
+    fn get_save_action() -> gio::SimpleAction {
         let action = gio::SimpleAction::new("save-splits", None);
         action.connect_activate(move |_, _| {
-            let t = timer.read().unwrap();
-            let c = config.read().unwrap();
-            c.save_splits(&t);
+            let ctx = TuxSplitContext::get_instance();
+            if let Ok(c) = ctx.config_mut() {
+                let shared_timer = ctx.timer();
+                let t = shared_timer.read().unwrap();
+                c.save_splits(&t);
+            }
         });
         action
     }
 
-    fn get_edit_action(
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-        ctx: Arc<TuxSplitContext>,
-    ) -> gio::SimpleAction {
+    fn get_edit_action() -> gio::SimpleAction {
         let action = gio::SimpleAction::new("edit-splits", None);
-        let config_binding = config.clone();
-        let ctx_binding = ctx.clone();
         action.connect_activate(move |_, _| {
-            let editor = SplitEditor::new(timer.clone(), ctx_binding.clone());
+            let editor = SplitEditor::new();
 
             // temporary_keybinds_disable(config_binding.clone(), editor.dialog());
 
@@ -133,14 +105,9 @@ impl TuxSplitMenu {
         action
     }
 
-    fn get_load_action(
-        parent: &adw::ApplicationWindow,
-        config: Arc<RwLock<Config>>,
-        ctx: Arc<TuxSplitContext>,
-    ) -> gio::SimpleAction {
+    fn get_load_action(parent: &adw::ApplicationWindow) -> gio::SimpleAction {
         let parent_binding = parent.clone();
         let action = gio::SimpleAction::new("load-splits", None);
-        let ctx_binding = ctx.clone();
         action.connect_activate(move |_, _| {
             let file_chooser = FileChooserDialog::new(
                 Some("Load Splits"),
@@ -161,18 +128,18 @@ impl TuxSplitMenu {
             file_chooser.add_filter(&lss_filter);
             file_chooser.add_filter(&all_filter);
 
-            let c_binding = config.clone();
-            let context = ctx_binding.clone();
             file_chooser.connect_response(move |dialog, response| {
                 if response == gtk4::ResponseType::Ok
                     && let Some(file) = dialog.file()
                     && let Some(path) = file.path()
                 {
-                    let mut c = c_binding.write().unwrap();
-                    c.set_splits_path(path);
-                    if let Some(run) = c.parse_run() {
-                        drop(c); // Set run needs write access to config
-                        context.set_run(run);
+                    let ctx = TuxSplitContext::get_instance();
+                    if let Ok(mut c) = ctx.config_mut() {
+                        c.set_splits_path(path);
+                        if let Some(run) = c.parse_run() {
+                            drop(c); // Set run needs write access to config
+                            ctx.set_run(run);
+                        }
                     }
                 }
                 dialog.destroy();
@@ -220,19 +187,13 @@ impl TuxSplitMenu {
         action
     }
 
-    fn get_settings_action(
-        parent: &adw::ApplicationWindow,
-        timer: Arc<RwLock<Timer>>,
-        config: Arc<RwLock<Config>>,
-    ) -> gio::SimpleAction {
+    fn get_settings_action(parent: &adw::ApplicationWindow) -> gio::SimpleAction {
         let parent_for_settings = parent.clone();
-        let timer_binding = timer.clone();
-        let config_binding = config.clone();
         let action = gio::SimpleAction::new("settings", None);
         action.connect_activate(move |_, _| {
-            let prefs = TimerPreferencesDialog::new(timer_binding.clone(), config_binding.clone());
+            let prefs = TimerPreferencesDialog::new();
 
-            temporary_keybinds_disable(config_binding.clone(), prefs.dialog());
+            temporary_keybinds_disable(prefs.dialog());
 
             prefs.present(&parent_for_settings);
         });
@@ -256,16 +217,19 @@ impl TuxSplitMenu {
     }
 }
 
-fn temporary_keybinds_disable(config_binding: Arc<RwLock<Config>>, widget: &PreferencesDialog) {
+fn temporary_keybinds_disable(widget: &PreferencesDialog) {
     // Disable and enable keybinds while settings are open
-    let config_rebinding = config_binding.clone();
+    let ctx = TuxSplitContext::get_instance();
     {
-        let mut c = config_rebinding.write().unwrap();
-        c.disable_hotkey_system();
+        if let Ok(mut c) = ctx.config_mut() {
+            c.disable_hotkey_system();
+        }
     }
     widget.connect_closed(move |_| {
-        let mut c = config_rebinding.write().unwrap();
-        c.enable_hotkey_system();
+        let ctx = TuxSplitContext::get_instance();
+        if let Ok(mut c) = ctx.config_mut() {
+            c.enable_hotkey_system();
+        }
     });
 }
 

@@ -1,13 +1,9 @@
-use std::sync::{Arc, RwLock};
-
 use adw::{
     ComboRow, ExpanderRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow,
     prelude::*,
 };
 use gtk4::{self as gtk, StringList};
-use livesplit_core::{Timer, TimingMethod};
-
-use crate::config::Config;
+use livesplit_core::TimingMethod;
 
 #[derive(Clone, Copy)]
 enum FormatTarget {
@@ -19,21 +15,15 @@ enum FormatTarget {
 
 pub struct TimerPreferencesDialog {
     dialog: PreferencesDialog,
-    timer: Arc<RwLock<Timer>>,
-    config: Arc<RwLock<Config>>,
 }
 
 impl TimerPreferencesDialog {
-    pub fn new(timer: Arc<RwLock<Timer>>, config: Arc<RwLock<Config>>) -> Self {
+    pub fn new() -> Self {
         let dialog = PreferencesDialog::new();
         dialog.set_height_request(500);
         dialog.set_title("Timer Preferences");
 
-        let this = Self {
-            dialog,
-            timer,
-            config,
-        };
+        let this = Self { dialog };
 
         let general = this.build_general_page();
         let style = this.build_style_page();
@@ -80,7 +70,8 @@ impl TimerPreferencesDialog {
         let segments_group = PreferencesGroup::builder().title("Segments").build();
 
         let (max_segments, follow_from) = {
-            let c = self.config.read().unwrap();
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let c = ctx.config();
             let max_segments = c.style.max_segments_displayed.unwrap_or(10) as f64;
             let follow_from = c.style.segments_scroll_follow_from.unwrap_or(8) as f64;
             (max_segments, follow_from)
@@ -90,25 +81,23 @@ impl TimerPreferencesDialog {
         let follow_from_row = SpinRow::with_range(0.0, max_segments, 1.0);
         follow_from_row.set_title("Scroll follow from");
         follow_from_row.set_value(follow_from);
-        let config = Arc::clone(&self.config);
         follow_from_row.connect_value_notify(move |r| {
             let value = r.value().round().clamp(0.0, 1000.0) as usize;
-            let mut cfg = config.write().unwrap();
-            cfg.style.segments_scroll_follow_from = Some(value);
-            drop(cfg);
+            if let Ok(mut cfg) = crate::context::TuxSplitContext::get_instance().config_mut() {
+                cfg.style.segments_scroll_follow_from = Some(value);
+            }
         });
 
         // Max segments displayed
         let max_segments_row = SpinRow::with_range(1.0, 1000.0, 1.0);
         max_segments_row.set_title("Max segments displayed");
         max_segments_row.set_value(max_segments);
-        let config = Arc::clone(&self.config);
         let follow_from_row_binding = follow_from_row.clone();
         max_segments_row.connect_value_notify(move |r| {
             let value = r.value().round().clamp(1.0, 1000.0) as usize;
-            let mut cfg = config.write().unwrap();
-            cfg.style.max_segments_displayed = Some(value);
-            drop(cfg); // We need to drop the lock becuase it might be required by follow_from adjustment when the value is modified
+            if let Ok(mut cfg) = crate::context::TuxSplitContext::get_instance().config_mut() {
+                cfg.style.max_segments_displayed = Some(value);
+            }
 
             // Adjust follow_from if necessary
             follow_from_row_binding.set_range(0.0, value as f64);
@@ -175,16 +164,14 @@ impl TimerPreferencesDialog {
         row.set_model(Some(&model));
 
         let initial_selected = {
-            let c = self.config.read().unwrap();
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let c = ctx.config();
             match c.general.timing_method {
                 Some(TimingMethod::GameTime) => 1,
                 _ => 0, // default Real Time
             }
         };
         row.set_selected(initial_selected);
-
-        let timer = Arc::clone(&self.timer);
-        let config = Arc::clone(&self.config);
 
         row.connect_selected_notify(move |r| {
             let selected = r.selected();
@@ -194,13 +181,14 @@ impl TimerPreferencesDialog {
                 TimingMethod::RealTime
             };
 
-            {
-                let mut cfg = config.write().unwrap();
+            if let Ok(mut cfg) = crate::context::TuxSplitContext::get_instance().config_mut() {
                 cfg.general.timing_method = Some(method);
             }
 
+            if let Ok(mut t) = crate::context::TuxSplitContext::get_instance()
+                .timer()
+                .try_write()
             {
-                let mut t = timer.write().unwrap();
                 t.set_current_timing_method(method);
             }
         });
@@ -215,7 +203,8 @@ impl TimerPreferencesDialog {
         target: FormatTarget,
     ) -> ExpanderRow {
         let (initial_mode_index, initial_decimals) = {
-            let cfg = self.config.read().unwrap();
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let cfg = ctx.config();
             let tf = match target {
                 FormatTarget::Timer => &cfg.format.timer,
                 FormatTarget::Split => &cfg.format.split,
@@ -247,48 +236,48 @@ impl TimerPreferencesDialog {
         decimals_row.set_title("Decimal places");
         decimals_row.set_value(f64::from(initial_decimals));
 
-        let config_for_mode = Arc::clone(&self.config);
         mode_row.connect_selected_notify(move |r| {
             let idx = r.selected();
-            let mut cfg = config_for_mode.write().unwrap();
-            let tf = match target {
-                FormatTarget::Timer => &mut cfg.format.timer,
-                FormatTarget::Split => &mut cfg.format.split,
-                FormatTarget::Segment => &mut cfg.format.segment,
-                FormatTarget::Comparison => &mut cfg.format.comparison,
-            };
-            match idx {
-                0 => {
-                    // Show decimals
-                    tf.dynamic = false;
-                    tf.show_decimals = true;
+            if let Ok(mut cfg) = crate::context::TuxSplitContext::get_instance().config_mut() {
+                let tf = match target {
+                    FormatTarget::Timer => &mut cfg.format.timer,
+                    FormatTarget::Split => &mut cfg.format.split,
+                    FormatTarget::Segment => &mut cfg.format.segment,
+                    FormatTarget::Comparison => &mut cfg.format.comparison,
+                };
+                match idx {
+                    0 => {
+                        // Show decimals
+                        tf.dynamic = false;
+                        tf.show_decimals = true;
+                    }
+                    1 => {
+                        // Smart decimals
+                        tf.dynamic = true;
+                        tf.show_decimals = true;
+                    }
+                    2 => {
+                        // No decimals
+                        tf.dynamic = false;
+                        tf.show_decimals = false;
+                    }
+                    _ => {}
                 }
-                1 => {
-                    // Smart decimals
-                    tf.dynamic = true;
-                    tf.show_decimals = true;
-                }
-                2 => {
-                    // No decimals
-                    tf.dynamic = false;
-                    tf.show_decimals = false;
-                }
-                _ => {}
+                tf.set_decimal_places(tf.decimal_places);
             }
-            tf.set_decimal_places(tf.decimal_places);
         });
 
-        let config_for_decimals = Arc::clone(&self.config);
         decimals_row.connect_value_notify(move |row| {
             let val = row.value().round().clamp(1.0, 3.0) as u8;
-            let mut cfg = config_for_decimals.write().unwrap();
-            let tf = match target {
-                FormatTarget::Timer => &mut cfg.format.timer,
-                FormatTarget::Split => &mut cfg.format.split,
-                FormatTarget::Segment => &mut cfg.format.segment,
-                FormatTarget::Comparison => &mut cfg.format.comparison,
-            };
-            tf.set_decimal_places(val);
+            if let Ok(mut cfg) = crate::context::TuxSplitContext::get_instance().config_mut() {
+                let tf = match target {
+                    FormatTarget::Timer => &mut cfg.format.timer,
+                    FormatTarget::Split => &mut cfg.format.split,
+                    FormatTarget::Segment => &mut cfg.format.segment,
+                    FormatTarget::Comparison => &mut cfg.format.comparison,
+                };
+                tf.set_decimal_places(val);
+            }
         });
 
         expander.add_row(&mode_row);

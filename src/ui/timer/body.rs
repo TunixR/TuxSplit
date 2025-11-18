@@ -25,7 +25,7 @@ pub struct TimerBody {
 }
 
 impl TimerBody {
-    pub fn new(timer: &Timer, config: &mut Config) -> Self {
+    pub fn new(timer: &Timer, config: &Config) -> Self {
         let container = GtkBox::builder()
             .orientation(Orientation::Vertical)
             .hexpand(true)
@@ -52,7 +52,7 @@ impl TimerBody {
         self.segment_list.last_segment_list()
     }
 
-    pub fn refresh(&mut self, timer: &Timer, config: &mut Config, force_rebuild: bool) {
+    pub fn refresh(&mut self, timer: &Timer, config: &Config, force_rebuild: bool) {
         self.segment_list.update(timer, config, force_rebuild);
     }
 }
@@ -69,7 +69,7 @@ pub struct SegmentList {
 }
 
 impl SegmentList {
-    pub fn new(timer: &Timer, config: &mut Config) -> Self {
+    pub fn new(timer: &Timer, config: &Config) -> Self {
         let container = GtkBox::builder()
             .orientation(Orientation::Vertical)
             .hexpand(true)
@@ -131,7 +131,7 @@ impl SegmentList {
         &self.last_segment_list
     }
 
-    pub fn update(&mut self, timer: &Timer, config: &mut Config, force_rebuild: bool) {
+    pub fn update(&mut self, timer: &Timer, config: &Config, force_rebuild: bool) {
         // Detect structural changes or comparison/splits changes that force a full rebuild.
         let phase = timer.current_phase();
         let comp_changed = self.last_comparison.as_str() != timer.current_comparison();
@@ -204,7 +204,7 @@ impl SegmentList {
         self.list.selected_row().map(|row| row.index())
     }
 
-    fn update_rows_minimal(&mut self, timer: &Timer, config: &mut Config) {
+    fn update_rows_minimal(&mut self, timer: &Timer, config: &Config) {
         if let Some(cur) = timer.current_split_index() {
             let len = timer.run().segments().len();
 
@@ -313,11 +313,11 @@ impl SegmentList {
         }
     }
 
-    fn rebuild_rows(&mut self, timer: &Timer, config: &mut Config) {
+    fn rebuild_rows(&mut self, timer: &Timer, config: &Config) {
         self.build_rows(timer, config);
     }
 
-    fn build_rows(&mut self, timer: &Timer, config: &mut Config) {
+    fn build_rows(&mut self, timer: &Timer, config: &Config) {
         while let Some(child) = self.list.first_child() {
             self.list.remove(&child);
         }
@@ -344,7 +344,7 @@ impl SegmentList {
         self.last_comparison = timer.current_comparison().to_string();
     }
 
-    fn compute_scroller_height(timer: &Timer, config: &mut Config) -> i32 {
+    fn compute_scroller_height(timer: &Timer, config: &Config) -> i32 {
         let segments_requested = config.style.max_segments_displayed.unwrap_or(10);
 
         if segments_requested < timer.run().len() - 1 {
@@ -368,7 +368,7 @@ impl SegmentRow {
 
     pub fn new(
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         opt_current_segment_index: Option<usize>,
         index: usize,
         segment: &livesplit_core::Segment,
@@ -394,7 +394,7 @@ impl SegmentRow {
     pub fn refresh(
         &mut self,
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         opt_current_segment_index: Option<usize>,
         index: usize,
         segment: &livesplit_core::Segment,
@@ -431,7 +431,7 @@ pub struct SegmentSuffix {
 impl SegmentSuffix {
     pub fn new(
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         opt_current_segment_index: Option<usize>,
         index: usize,
         segment: &livesplit_core::Segment,
@@ -471,7 +471,7 @@ impl SegmentSuffix {
     fn compute_segment(
         &self,
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         opt_current_segment_index: Option<usize>,
         index: usize,
         segment: &livesplit_core::Segment,
@@ -525,7 +525,7 @@ impl SegmentSuffix {
     fn compute_passed_segment(
         &self,
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         segment: &livesplit_core::Segment,
         segment_comparison_time: time::Duration,
         previous_split_time: time::Duration,
@@ -572,7 +572,7 @@ impl SegmentSuffix {
     fn compute_current_segment(
         &self,
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         index: usize,
         segment_comparison_time: time::Duration,
         previous_split_time: time::Duration,
@@ -630,7 +630,7 @@ mod segment_row_ui_tests {
         let mut config = Config::default();
 
         let segment = &timer.run().segments()[0];
-        let row = SegmentRow::new(&timer, &mut config, None, 0, segment);
+        let row = SegmentRow::new(&timer, &config, None, 0, segment);
 
         assert_eq!(row.row().title().as_str(), "Split A");
         assert!(
@@ -651,7 +651,7 @@ mod segment_row_ui_tests {
         let mut config = Config::default();
 
         let segment = &timer.run().segments()[0];
-        let row = SegmentRow::new(&timer, &mut config, Some(0), 0, segment);
+        let row = SegmentRow::new(&timer, &config, Some(0), 0, segment);
 
         assert_eq!(row.row().title().as_str(), "Split A");
         assert!(

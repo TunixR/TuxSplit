@@ -8,7 +8,7 @@ use std::path::Path;
 
 use tracing::info;
 
-use crate::context::{TuxSplitContext, build_ui, shutdown};
+use crate::context::{build_ui, shutdown};
 use adw::Application;
 use adw::prelude::*;
 use gtk4::{
@@ -38,26 +38,19 @@ fn main() {
         .application_id("io.github.tunixr.tuxsplit")
         .build();
 
-    let app_ctx = TuxSplitContext::new_initialized();
-
     {
-        let ctx_binding = app_ctx.clone();
         app.connect_activate(move |app| {
             load_styles();
-            build_ui(&ctx_binding, app);
+            build_ui(app);
         });
     }
     {
-        let ctx_binding = app_ctx.clone();
         app.connect_shutdown(move |_| {
-            shutdown(&ctx_binding);
+            shutdown();
         });
     }
     app.run();
 }
-
-
-
 
 fn load_styles() {
     let display = Display::default().expect("Could not connect to a display");

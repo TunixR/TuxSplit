@@ -11,6 +11,9 @@ A clean, opinionated, GTK4-based speedrun timer for Linux. Load your LiveSplit s
 ![Screenshot](https://raw.githubusercontent.com/TunixR/tuxsplit/main/assets/screenshot_settings.png)
 > One of the pages of the settings dialog. They are all integrated in the same manner
 
+![Screenshot](https://raw.githubusercontent.com/TunixR/tuxsplit/main/assets/screenshot_segment_editor.png)
+> The segment editor allows adding, removing, renaming, reordering, and modifying splits times
+
 TuxSplit is currently in a very early development phase. The checklist below tracks what's ready today and what’s planned next, so you can quickly see the state of the app and what will be added down the line.
 
 ---

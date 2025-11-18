@@ -15,6 +15,8 @@ use std::{
 };
 use tracing::error;
 
+pub type SharedConfig = std::sync::Arc<std::sync::RwLock<Config>>;
+
 #[derive(Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -262,5 +264,9 @@ impl Config {
             error!("Auto Splitter failed to load: {}", &e); // TODO: Create a custom error that
             // pops up in the UI
         }
+    }
+
+    pub fn into_shared(self) -> SharedConfig {
+        std::sync::Arc::new(std::sync::RwLock::new(self))
     }
 }

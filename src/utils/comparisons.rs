@@ -138,7 +138,7 @@ pub fn best_comparison_values(timer: &Timer, index: usize) -> (time::Duration, t
     }
 }
 
-pub fn format_signed(diff: time::Duration, config: &mut Config) -> String {
+pub fn format_signed(diff: time::Duration, config: &Config) -> String {
     let sign = if diff.is_positive() {
         "+"
     } else if diff.is_negative() {

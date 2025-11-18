@@ -1,9 +1,10 @@
-use livesplit_core::{Run, Timer, TimingMethod};
+use livesplit_core::{Run, TimingMethod};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use gtk4::{Box as GtkBox, ColumnView, ColumnViewColumn, ScrolledWindow, prelude::*};
 
+use crate::context::TuxSplitContext;
 use crate::formatters::time::parse_hms;
 use crate::ui::editor::context::SegmentMoveDirection;
 use crate::ui::editor::row::SegmentRow;
@@ -13,7 +14,6 @@ pub struct SegmentsEditor {
     container: GtkBox,
     table: ColumnView,
     model: gtk4::SingleSelection,
-    timer: Arc<RwLock<Timer>>,
     timing_method: Arc<RwLock<TimingMethod>>,
     context: EditorContext,
     segments_model: SegmentsModel,
@@ -21,11 +21,17 @@ pub struct SegmentsEditor {
 
 impl SegmentsEditor {
     pub fn new(context: EditorContext) -> Rc<Self> {
-        let timer = context.timer();
+        let ctx = TuxSplitContext::get_instance();
         let timing_method = Arc::new(RwLock::new(TimingMethod::RealTime));
 
         let segments_model = SegmentsModel::new();
-        segments_model.build_from_timer(&timer.read().unwrap(), TimingMethod::RealTime);
+        {
+            let t = {
+                let shared = ctx.timer();
+                shared.read().unwrap().clone()
+            };
+            segments_model.build_from_timer(&t, TimingMethod::RealTime);
+        }
         let model_store = segments_model.store();
         let model = gtk4::SingleSelection::new(Some(model_store));
 
@@ -56,7 +62,7 @@ impl SegmentsEditor {
             container,
             table,
             model,
-            timer,
+
             timing_method,
             context,
             segments_model,
@@ -112,7 +118,11 @@ impl SegmentsEditor {
     }
 
     fn update_data_model(&self) {
-        let timer = self.timer.read().unwrap();
+        let ctx = TuxSplitContext::get_instance();
+        let timer = {
+            let shared = ctx.timer();
+            shared.read().unwrap().clone()
+        };
         let method = *self.timing_method.read().unwrap();
         self.segments_model.refresh_from_timer(&timer, method);
     }
@@ -404,7 +414,7 @@ impl SegmentsEditor {
                     );
                     model_binding.set_selected(std::cmp::min(
                         model_binding.selected() + 1,
-                        context.timer().read().unwrap().run().segments().len() as u32 - 1, // At least one segment will be present
+                        TuxSplitContext::get_instance().get_run().segments().len() as u32 - 1, // At least one segment will be present
                     ));
                 });
             }
@@ -444,7 +454,7 @@ impl SegmentsEditor {
                     context.add_segment(selected as usize, SegmentMoveDirection::Down);
                     model_binding.set_selected(std::cmp::min(
                         selected + 1,
-                        context.timer().read().unwrap().run().segments().len() as u32 - 1, // At least one segment will be present
+                        TuxSplitContext::get_instance().get_run().segments().len() as u32 - 1, // At least one segment will be present
                     ));
                 });
             }
@@ -465,7 +475,7 @@ impl SegmentsEditor {
                 // We restore the selection
                 model_binding.set_selected(std::cmp::min(
                     selected,
-                    context.timer().read().unwrap().run().segments().len() as u32 - 1, // At least one segment will be present
+                    TuxSplitContext::get_instance().get_run().segments().len() as u32 - 1, // At least one segment will be present
                 ));
             });
         }
@@ -535,7 +545,7 @@ mod tests {
         run.push_segment(s1);
 
         let timer = make_timer_with_run(run);
-        let context = EditorContext::new(Arc::clone(&timer), None);
+        let context = EditorContext::new();
         let editor = SegmentsEditor::new(context);
 
         // Initially RealTime -> expect 10.000

@@ -23,7 +23,7 @@ pub struct TimerFooter {
 impl TimerFooter {
     pub fn new(
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         primary_list: &ListBox,
         last_segment_list: &ListBox,
     ) -> Self {
@@ -66,7 +66,7 @@ impl TimerFooter {
         &self.container
     }
 
-    pub fn refresh(&mut self, timer: &Timer, config: &mut Config) {
+    pub fn refresh(&mut self, timer: &Timer, config: &Config) {
         self.segment_comparison.update(timer, config);
         self.running_timer.update(timer, config);
         self.additional_info.update(timer, config);
@@ -83,7 +83,7 @@ pub struct AdditionalInfoFooter {
 }
 
 impl AdditionalInfoFooter {
-    pub fn new(timer: &Timer, config: &mut Config) -> Self {
+    pub fn new(timer: &Timer, config: &Config) -> Self {
         let additional_info: Vec<Box<dyn AdditionalInfo>> = vec![
             Box::new(PrevSegmentDiffInfo::new(timer, config)),
             Box::new(PrevSegmentBestInfo::new(timer, config)),
@@ -95,7 +95,7 @@ impl AdditionalInfoFooter {
         Self { additional_info }
     }
 
-    pub fn update(&mut self, timer: &Timer, config: &mut Config) {
+    pub fn update(&mut self, timer: &Timer, config: &Config) {
         for info in &mut self.additional_info {
             info.update(timer, config);
         }
@@ -132,7 +132,7 @@ pub struct SegmentComparison {
 impl SegmentComparison {
     pub fn new(
         timer: &Timer,
-        config: &mut Config,
+        config: &Config,
         primary_list: &ListBox,
         last_list: &ListBox,
     ) -> Self {
@@ -167,11 +167,11 @@ impl SegmentComparison {
         &self.wrapper
     }
 
-    pub fn update(&mut self, timer: &Timer, config: &mut Config) {
+    pub fn update(&mut self, timer: &Timer, config: &Config) {
         self.rebuild(timer, config);
     }
 
-    fn rebuild(&mut self, timer: &Timer, config: &mut Config) {
+    fn rebuild(&mut self, timer: &Timer, config: &Config) {
         // Compute which segment to display
         let segments = timer.run().segments();
         let selected_index = if timer.current_phase().is_running() {
@@ -289,7 +289,7 @@ pub struct RunningTimer {
 }
 
 impl RunningTimer {
-    pub fn new(timer: &Timer, config: &mut Config) -> Self {
+    pub fn new(timer: &Timer, config: &Config) -> Self {
         let wrapper = GtkBox::builder()
             .orientation(Horizontal)
             .halign(Align::End)
@@ -332,11 +332,11 @@ impl RunningTimer {
         &self.wrapper
     }
 
-    pub fn update(&mut self, timer: &Timer, config: &mut Config) {
+    pub fn update(&mut self, timer: &Timer, config: &Config) {
         self.rebuild(timer, config);
     }
 
-    fn rebuild(&mut self, timer: &Timer, config: &mut Config) {
+    fn rebuild(&mut self, timer: &Timer, config: &Config) {
         self.timer_box.set_css_classes(match timer.current_phase() {
             TimerPhase::Running => &["timer", "active-timer"],
             _ => &["timer", "inactive-timer"],
@@ -385,9 +385,9 @@ mod footer_ui_tests {
         run.set_offset(livesplit_core::TimeSpan::from_seconds(-5.0));
         run.push_segment(livesplit_core::Segment::new("Split 1"));
         let timer = livesplit_core::Timer::new(run).expect("timer");
-        let mut config = Config::default();
+        let config = Config::default();
 
-        let rt = RunningTimer::new(&timer, &mut config);
+        let rt = RunningTimer::new(&timer, &config);
         let wrapper = rt.container();
 
         let timer_box_w = wrapper.first_child().expect("timer box");
@@ -429,9 +429,9 @@ mod footer_ui_tests {
         run.set_category_name("Any%");
         run.push_segment(livesplit_core::Segment::new("Split 1"));
         let mut timer = livesplit_core::Timer::new(run).expect("timer");
-        let mut config = Config::default();
+        let config = Config::default();
 
-        let mut rt = RunningTimer::new(&timer, &mut config);
+        let mut rt = RunningTimer::new(&timer, &config);
 
         // Initially not running
         let wrapper = rt.container();
@@ -467,7 +467,7 @@ mod footer_ui_tests {
 
         // Start timer -> active
         timer.start();
-        rt.update(&timer, &mut config);
+        rt.update(&timer, &config);
         let wrapper = rt.container();
         let timer_box_w = wrapper.first_child().expect("timer box");
         let timer_box: GtkBox = timer_box_w.downcast().expect("GtkBox");
@@ -478,7 +478,7 @@ mod footer_ui_tests {
 
         // Pause -> inactive
         timer.pause();
-        rt.update(&timer, &mut config);
+        rt.update(&timer, &config);
         let wrapper = rt.container();
         let timer_box_w = wrapper.first_child().expect("timer box");
         let timer_box: GtkBox = timer_box_w.downcast().expect("GtkBox");
@@ -489,7 +489,7 @@ mod footer_ui_tests {
 
         // Reset -> inactive
         timer.reset(false);
-        rt.update(&timer, &mut config);
+        rt.update(&timer, &config);
         let wrapper = rt.container();
         let timer_box_w = wrapper.first_child().expect("timer box");
         let timer_box: GtkBox = timer_box_w.downcast().expect("GtkBox");
@@ -512,10 +512,10 @@ mod footer_ui_tests {
         run.set_category_name("Any%");
         run.push_segment(livesplit_core::Segment::new("Split 1"));
         let timer = livesplit_core::Timer::new(run).expect("timer");
-        let mut config = Config::default();
+        let config = Config::default();
 
         let last_list = ListBox::new();
-        let mut sc = SegmentComparison::new(&timer, &mut config, &list, &last_list);
+        let mut sc = SegmentComparison::new(&timer, &config, &list, &last_list);
         let wrapper = sc.container();
 
         // vbox inside wrapper
@@ -567,6 +567,6 @@ mod footer_ui_tests {
         assert_eq!(comp_value.label().as_str(), "--");
 
         // Ensure update works without panics and keeps structure
-        sc.update(&timer, &mut config);
+        sc.update(&timer, &config);
     }
 }

@@ -19,7 +19,7 @@ use adw::{Application, ApplicationWindow, ToolbarView};
 use tracing::debug;
 use tracing::info;
 
-use livesplit_core::{Run, Timer, auto_splitting::Runtime};
+use livesplit_core::{Run, SharedTimer, Timer, auto_splitting::Runtime};
 
 use crate::config::Config;
 use crate::ui::TuxSplitHeader;
@@ -29,9 +29,9 @@ mod imp {
     use super::*;
 
     pub struct TuxSplitContext {
-        pub timer: RefCell<Arc<RwLock<Timer>>>,
+        pub timer: RefCell<SharedTimer>,
         pub runtime: RefCell<Runtime>,
-        pub config: RefCell<Arc<RwLock<Config>>>,
+        pub config: RefCell<Config>,
     }
 
     impl Default for TuxSplitContext {
@@ -50,7 +50,7 @@ mod imp {
             Self {
                 timer: RefCell::new(shared),
                 runtime: RefCell::new(runtime),
-                config: RefCell::new(Arc::new(RwLock::new(config))),
+                config: RefCell::new(config),
             }
         }
     }
@@ -85,7 +85,7 @@ impl TuxSplitContext {
     /// Construct a new initialized global context.
     ///
     /// Panics if the timer or hotkey system cannot be created.
-    pub fn new_initialized() -> Arc<Self> {
+    fn init() -> Self {
         let mut config = load_config();
         let run = config.parse_run_or_default();
 
@@ -106,18 +106,37 @@ impl TuxSplitContext {
             let imp = obj.imp();
             imp.timer.replace(shared_timer);
             imp.runtime.replace(runtime);
-            imp.config.replace(Arc::new(RwLock::new(config)));
+            imp.config.replace(config);
         }
 
-        Arc::new(obj)
+        obj
+    }
+
+    pub fn get_instance() -> Arc<Self> {
+        thread_local! {
+            static INSTANCE: OnceLock<Arc<TuxSplitContext>> = OnceLock::new();
+        }
+        INSTANCE.with(|instance| {
+            instance
+                .get_or_init(|| Arc::new(TuxSplitContext::init()))
+                .clone()
+        })
     }
 
     pub fn timer(&self) -> Arc<RwLock<Timer>> {
         self.imp().timer.borrow().clone()
     }
 
-    pub fn config(&self) -> Arc<RwLock<Config>> {
-        self.imp().config.borrow().clone()
+    pub fn get_run(&self) -> Run {
+        self.timer().read().unwrap().run().clone()
+    }
+
+    pub fn config(&self) -> std::cell::Ref<Config> {
+        self.imp().config.borrow()
+    }
+
+    pub fn config_mut(&self) -> Result<std::cell::RefMut<'_, Config>, std::cell::BorrowMutError> {
+        self.imp().config.try_borrow_mut()
     }
 
     pub fn runtime(&self) -> std::cell::Ref<'_, Runtime> {
@@ -137,37 +156,35 @@ impl TuxSplitContext {
             let mut timer = timer_arc.write().unwrap();
             let _ = timer.set_run(new_run);
             // Re-apply config in case it needs to reinitialize aspects of the timer.
-            {
-                let cfg_arc = self.imp().config.borrow().clone();
-                let cfg = cfg_arc.write().unwrap();
-                cfg.configure_timer(&mut timer);
-            }
+            self.config().configure_timer(&mut timer);
         }
         self.emit_run_changed();
     }
 
     pub fn disable_hotkeys(&self) {
-        let cfg_arc = self.imp().config.borrow().clone();
-        cfg_arc.write().unwrap().disable_hotkey_system();
+        if let Ok(mut cfg_write) = self.config_mut() {
+            cfg_write.disable_hotkey_system();
+        }
     }
 
     pub fn enable_hotkeys(&self) {
-        let cfg_arc = self.imp().config.borrow().clone();
-        cfg_arc.write().unwrap().enable_hotkey_system();
+        if let Ok(mut cfg_write) = self.config_mut() {
+            cfg_write.enable_hotkey_system();
+        }
     }
 }
 
-pub fn build_ui(app_ctx: &Arc<TuxSplitContext>, app: &Application) {
+pub fn build_ui(app: &Application) {
     let window: ApplicationWindow = ApplicationWindow::builder()
         .application(app)
         .title("TuxSplit")
         .build();
 
     let toolbar_view = ToolbarView::new();
-    let header = TuxSplitHeader::new(&window, app_ctx.timer(), app_ctx.config(), app_ctx.clone());
+    let header = TuxSplitHeader::new(&window);
     toolbar_view.add_top_bar(header.header());
 
-    let mut timer_widget = TuxSplitTimer::new(app_ctx.timer(), app_ctx.config(), app_ctx.clone());
+    let mut timer_widget = TuxSplitTimer::new();
     timer_widget.start_refresh_loop();
     toolbar_view.set_content(Some(timer_widget.clamped()));
 
@@ -175,11 +192,10 @@ pub fn build_ui(app_ctx: &Arc<TuxSplitContext>, app: &Application) {
     window.present();
 }
 
-pub fn shutdown(app_ctx: &TuxSplitContext) {
+pub fn shutdown() {
     info!("Shutting down TuxSplit");
-    let cfg = app_ctx.config().clone();
-    cfg.read()
-        .unwrap()
+    TuxSplitContext::get_instance()
+        .config()
         .save(get_config_path().join("config.yaml"))
         .expect("Failed to save config on shutdown");
 }

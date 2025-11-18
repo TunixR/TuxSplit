@@ -43,7 +43,7 @@ impl TimerHeader {
 
     /// Update the header from the current timer/config state.
     /// Currently only the timer is used (to update game/category labels).
-    pub fn refresh(&mut self, timer: &Timer, _config: &mut Config) {
+    pub fn refresh(&mut self, timer: &Timer) {
         self.run_info.update(timer);
     }
 }

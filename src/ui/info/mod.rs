@@ -1,15 +1,19 @@
 use crate::config::Config;
-use crate::utils::comparisons::{segment_comparison_time, previous_comparison_values, segment_split_time, format_signed, best_segment_duration, classify_split_label, segment_best_time, best_comparison_values, current_attempt_running_duration, real_time_sob};
+use crate::utils::comparisons::{
+    best_comparison_values, best_segment_duration, classify_split_label,
+    current_attempt_running_duration, format_signed, previous_comparison_values, real_time_sob,
+    segment_best_time, segment_comparison_time, segment_split_time,
+};
 
 use gtk4::{CenterBox, Label, Orientation::Horizontal, prelude::WidgetExt};
 
 use livesplit_core::Timer;
 
 pub trait AdditionalInfo {
-    fn new(timer: &Timer, config: &mut Config) -> Self
+    fn new(timer: &Timer, config: &Config) -> Self
     where
         Self: Sized;
-    fn update(&mut self, timer: &Timer, config: &mut Config);
+    fn update(&mut self, timer: &Timer, config: &Config);
     fn container(&self) -> &CenterBox;
 }
 
@@ -32,7 +36,7 @@ pub struct BestPossibleTimeInfo {
 }
 
 impl AdditionalInfo for PrevSegmentDiffInfo {
-    fn new(timer: &Timer, config: &mut Config) -> Self {
+    fn new(timer: &Timer, config: &Config) -> Self {
         let container = CenterBox::builder().orientation(Horizontal).build();
 
         let label = Label::builder()
@@ -55,7 +59,7 @@ impl AdditionalInfo for PrevSegmentDiffInfo {
         res
     }
 
-    fn update(&mut self, timer: &Timer, config: &mut Config) {
+    fn update(&mut self, timer: &Timer, config: &Config) {
         self.value.set_css_classes(&[]);
         self.value.set_label("");
         if let Some(mut index) = timer.current_split_index()
@@ -112,7 +116,7 @@ impl AdditionalInfo for PrevSegmentDiffInfo {
 }
 
 impl AdditionalInfo for PrevSegmentBestInfo {
-    fn new(timer: &Timer, config: &mut Config) -> Self {
+    fn new(timer: &Timer, config: &Config) -> Self {
         let container = CenterBox::builder().orientation(Horizontal).build();
 
         let label = Label::builder()
@@ -135,7 +139,7 @@ impl AdditionalInfo for PrevSegmentBestInfo {
         res
     }
 
-    fn update(&mut self, timer: &Timer, config: &mut Config) {
+    fn update(&mut self, timer: &Timer, config: &Config) {
         self.value.set_css_classes(&[]);
         self.value.set_label("");
         if let Some(mut index) = timer.current_split_index()
@@ -192,7 +196,7 @@ impl AdditionalInfo for PrevSegmentBestInfo {
 }
 
 impl AdditionalInfo for BestPossibleTimeInfo {
-    fn new(timer: &Timer, config: &mut Config) -> Self {
+    fn new(timer: &Timer, config: &Config) -> Self {
         let container = CenterBox::builder().orientation(Horizontal).build();
 
         let label = Label::builder()
@@ -215,7 +219,7 @@ impl AdditionalInfo for BestPossibleTimeInfo {
         res
     }
 
-    fn update(&mut self, timer: &Timer, config: &mut Config) {
+    fn update(&mut self, timer: &Timer, config: &Config) {
         if timer.current_phase().is_not_running() {
             self.value.set_label("");
         } else if timer.current_phase().is_running() || timer.current_phase().is_paused() {
