@@ -379,6 +379,22 @@ impl SegmentRow {
             .title_lines(1)
             .build();
 
+        let icon = segment.icon();
+        let mut data = icon.data().to_vec();
+
+        if !data.is_empty() && config.style.show_icons.unwrap_or(true) {
+            if !data.ends_with(&[0x82]) {
+                // PNG data must end in AE 42 60 82 (IEND CRC)
+                // For some fucking reason, the data obtained from livesplit-core misses the last byte
+                data.push(0x82);
+            }
+            let bytes = glib::Bytes::from(&data);
+            let texture = gtk4::gdk::Texture::from_bytes(&bytes).unwrap();
+            let image = gtk4::Image::from_paintable(Some(&texture));
+            image.set_pixel_size(24); // Slightly bigger than font
+            row.add_prefix(&image);
+        }
+
         if Some(index) == opt_current_segment_index {
             row.add_css_class("current-segment");
         }

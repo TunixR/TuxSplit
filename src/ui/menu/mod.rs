@@ -1,6 +1,6 @@
 use adw::{
     ComboRow, ExpanderRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow,
-    prelude::*,
+    SwitchRow, prelude::*,
 };
 use gtk4::{self as gtk, StringList};
 use livesplit_core::TimingMethod;
@@ -106,8 +106,30 @@ impl TimerPreferencesDialog {
             }
         });
 
+        // Show Icons
+        let show_icons_row = SwitchRow::builder()
+            .title("Show Segment Icons")
+            .subtitle("Toggle the display of icons next to segment names")
+            .build();
+        let initial_show_icons = {
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let c = ctx.config();
+            c.style.show_icons.unwrap_or(true)
+        };
+        show_icons_row.set_active(initial_show_icons);
+        show_icons_row.connect_active_notify(move |r| {
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let active = r.is_active();
+            if let Ok(mut cfg) = ctx.config_mut() {
+                cfg.style.show_icons = Some(active);
+                drop(cfg);
+                ctx.emit_by_name::<()>("run-changed", &[]);
+            }
+        });
+
         segments_group.add(&max_segments_row);
         segments_group.add(&follow_from_row);
+        segments_group.add(&show_icons_row);
 
         page.add(&segments_group);
         page

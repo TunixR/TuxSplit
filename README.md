@@ -105,23 +105,23 @@ Wayland support will be added when consistant support for global hotkeys through
   - [ ] Wayland global hotkeys support (through xdg portals)
 - [x] UI
   - [x] Run info display (Game and Category)
-  - [ ] “Always on top” toggle
+  - [x] Icons
   - [ ] Layout customization (rows, columns, sizes, themes)
+  - [ ] “Always on top” toggle (Use your compositor equivalent for now)
   - [ ] Translations (multi-language)
-  - [ ] Enable/Disable color smooth color transitions (segment highlight)
 - [ ] Settings
-  - [ ] Settings screen (in-app)
+  - [x] Settings screen (in-app)
   - [ ] Export/import settings
 - [ ] Auto-splitters
   - [ ] Auto-splitter loading and management from the UI
-- [ ] Integrations
-  - [ ] Twitch/stream overlays and integrations
 - [ ] Distribution
-  - [ ] App packaging and distribution improvements
+  - [x] Flatpak
+    - [ ] Flathub
+  - [x] Meson Install script
 - [ ] Customizations
   - [ ] Custom split colors and styles
   - [ ] Custom comparisons
-  - [ ] Flexible time display formats (hours/minutes/seconds/decimals, dynamic).
+  - [x] Flexible time display formats (hours/minutes/seconds/decimals, dynamic).
 
 ---
 

@@ -76,6 +76,7 @@ pub struct General {
 pub struct Style {
     pub max_segments_displayed: Option<usize>,
     pub segments_scroll_follow_from: Option<usize>,
+    pub show_icons: Option<bool>,
 }
 
 impl Default for Style {
@@ -83,6 +84,7 @@ impl Default for Style {
         Self {
             max_segments_displayed: Some(10),
             segments_scroll_follow_from: Some(8),
+            show_icons: Some(true),
         }
     }
 }
