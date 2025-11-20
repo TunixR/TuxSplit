@@ -218,15 +218,11 @@ impl SegmentComparison {
                 .unwrap_or_default()
                 .to_duration();
 
-            if previous_comparison_time.is_zero() || segment_comparison_time.is_zero() {
-                String::from("--")
-            } else {
-                let per_segment_time = segment_comparison_time
-                    .checked_sub(previous_comparison_time)
-                    .unwrap_or_default()
-                    .abs();
-                config.format.comparison.format_duration(&per_segment_time)
-            }
+            let per_segment_time = segment_comparison_time
+                .checked_sub(previous_comparison_time)
+                .unwrap_or_default()
+                .abs();
+            config.format.comparison.format_duration(&per_segment_time)
         };
 
         // Update stored labels in place
