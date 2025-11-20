@@ -1,8 +1,9 @@
 use crate::config::Config;
 use crate::formatters::label::format_label;
 use crate::ui::info::{
-    AdditionalInfo, BestPossibleTimeInfo, PossibleTimeSaveInfo, PrevSegmentBestInfo,
-    PrevSegmentDiffInfo,
+    ALL_ADDITIONAL_INFOS, AdditionalInfo, AdditionalInfoKind, BestPossibleTimeInfo,
+    CurrentPaceInfo, PbChanceInfo, PossibleTimeSaveInfo, PrevSegmentBestInfo, PrevSegmentDiffInfo,
+    TotalPlaytimeInfo,
 };
 
 use glib;
@@ -90,16 +91,31 @@ impl AdditionalInfoFooter {
             Box::new(PrevSegmentBestInfo::new(timer, config)),
             Box::new(BestPossibleTimeInfo::new(timer, config)),
             Box::new(PossibleTimeSaveInfo::new(timer, config)),
+            Box::new(CurrentPaceInfo::new(timer, config)),
+            Box::new(TotalPlaytimeInfo::new(timer, config)),
+            Box::new(PbChanceInfo::new(timer, config)),
         ];
 
-        // additional_info.push();
-
-        Self { additional_info }
+        // Initialize visibility based on config at creation time.
+        let mut this = Self { additional_info };
+        this.update(timer, config);
+        this
     }
 
     pub fn update(&mut self, timer: &Timer, config: &Config) {
-        for info in &mut self.additional_info {
+        for (kind, info) in ALL_ADDITIONAL_INFOS.iter().zip(&mut self.additional_info) {
             info.update(timer, config);
+            let vis_cfg = &config.general.additional_info;
+            let visible = match kind {
+                AdditionalInfoKind::PrevSegmentDiff => vis_cfg.show_prev_segment_diff,
+                AdditionalInfoKind::PrevSegmentBest => vis_cfg.show_prev_segment_best,
+                AdditionalInfoKind::BestPossibleTime => vis_cfg.show_best_possible_time,
+                AdditionalInfoKind::PossibleTimeSave => vis_cfg.show_possible_time_save,
+                AdditionalInfoKind::CurrentPace => vis_cfg.show_current_pace,
+                AdditionalInfoKind::TotalPlaytime => vis_cfg.show_total_playtime,
+                AdditionalInfoKind::PbChance => vis_cfg.show_pb_chance,
+            };
+            info.container().set_visible(visible);
         }
     }
 

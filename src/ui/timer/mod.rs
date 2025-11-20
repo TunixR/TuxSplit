@@ -64,8 +64,9 @@ impl TuxSplitTimer {
         clamp.set_child(Some(&container));
 
         {
-            // Connect global run-changed to force a rebuild of segment rows.
+            // Connect global run-changed to force a rebuild of timer UI.
             let body_binding = body.clone();
+            let footer_binding = footer.clone();
             TuxSplitContext::get_instance().connect_local("run-changed", false, move |_| {
                 let ctx = TuxSplitContext::get_instance();
                 let t = {
@@ -74,6 +75,7 @@ impl TuxSplitTimer {
                 };
                 let c = ctx.config();
                 body_binding.borrow_mut().refresh(&t, &c, true);
+                footer_binding.borrow_mut().refresh(&t, &c);
                 None
             });
         }

@@ -52,12 +52,86 @@ impl TimerPreferencesDialog {
             .icon_name("gears-symbolic")
             .build();
 
+        // Timing Group
         let timing_group = PreferencesGroup::builder().title("Timing").build();
-
         let timing_row = self.build_timing_method_row();
         timing_group.add(&timing_row);
-
         page.add(&timing_group);
+
+        // Additional Info Visibility Group
+        let additional_info_group = PreferencesGroup::builder().title("Additional Info").build();
+
+        {
+            let ctx = crate::context::TuxSplitContext::get_instance();
+            let cfg = ctx.config();
+            let info_cfg = &cfg.general.additional_info;
+
+            macro_rules! add_switch {
+                ($row_var:ident, $title:expr, $subtitle:expr, $field:ident) => {
+                    let $row_var = SwitchRow::builder()
+                        .title($title)
+                        .subtitle($subtitle)
+                        .build();
+                    $row_var.set_active(info_cfg.$field);
+                    $row_var.connect_active_notify(|r| {
+                        if let Ok(mut cfg) =
+                            crate::context::TuxSplitContext::get_instance().config_mut()
+                        {
+                            cfg.general.additional_info.$field = r.is_active();
+                            drop(cfg);
+                            crate::context::TuxSplitContext::get_instance().emit_run_changed();
+                        }
+                    });
+                    additional_info_group.add(&$row_var);
+                };
+            }
+
+            add_switch!(
+                prev_segment_best_row,
+                "Show Previous Segment Diff (Best)",
+                "Toggle visibility of the previous segment (best) delta",
+                show_prev_segment_best
+            );
+            add_switch!(
+                prev_segment_diff_row,
+                "Show Previous Segment Diff",
+                "Toggle visibility of the previous segment delta",
+                show_prev_segment_diff
+            );
+            add_switch!(
+                best_possible_time_row,
+                "Show Best Possible Time",
+                "Toggle visibility of the calculated best possible final time",
+                show_best_possible_time
+            );
+            add_switch!(
+                possible_time_save_row,
+                "Show Possible Time Save",
+                "Toggle visibility of potential time that could be saved on this segment",
+                show_possible_time_save
+            );
+            add_switch!(
+                current_pace_row,
+                "Show Current Pace",
+                "Toggle visibility of projected final time based on current progress",
+                show_current_pace
+            );
+            add_switch!(
+                total_playtime_row,
+                "Show Total Playtime",
+                "Toggle visibility of cumulative playtime across all attempts",
+                show_total_playtime
+            );
+            add_switch!(
+                pb_chance_row,
+                "Show PB Chance",
+                "Toggle visibility of the probability of achieving a Personal Best",
+                show_pb_chance
+            );
+        }
+
+        page.add(&additional_info_group);
+
         page
     }
 

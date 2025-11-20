@@ -79,7 +79,6 @@ Wayland support will be added when consistant support for global hotkeys through
   - [x] Splits list with current segment highlighting
   - [ ] Subsplits
   - [x] Scrollable list of splits
-    - [x] Adjustable max segments
     - [x] Auto-scroll to current split
     - [x] Fixed last split
   - [x] Multi-column splits view (name, time, delta, best segment, etc)
@@ -106,7 +105,10 @@ Wayland support will be added when consistant support for global hotkeys through
 - [x] UI
   - [x] Run info display (Game and Category)
   - [x] Icons
-  - [ ] Layout customization (rows, columns, sizes, themes)
+  - [ ] Layout customization (rows, columns)
+    - [x] Adjustable max segments
+    - [x] Comparison info
+    - [ ] Comparisons
   - [ ] “Always on top” toggle (Use your compositor equivalent for now)
   - [ ] Translations (multi-language)
 - [ ] Settings

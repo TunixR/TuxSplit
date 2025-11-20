@@ -9,6 +9,27 @@ use crate::utils::comparisons::{
 use gtk4::{CenterBox, Label, Orientation::Horizontal, prelude::WidgetExt};
 
 use livesplit_core::Timer;
+use livesplit_core::analysis::{current_pace, pb_chance, total_playtime};
+
+pub enum AdditionalInfoKind {
+    PrevSegmentDiff,
+    PrevSegmentBest,
+    BestPossibleTime,
+    PossibleTimeSave,
+    CurrentPace,
+    TotalPlaytime,
+    PbChance,
+}
+
+pub static ALL_ADDITIONAL_INFOS: [AdditionalInfoKind; 7] = [
+    AdditionalInfoKind::PrevSegmentDiff,
+    AdditionalInfoKind::PrevSegmentBest,
+    AdditionalInfoKind::BestPossibleTime,
+    AdditionalInfoKind::PossibleTimeSave,
+    AdditionalInfoKind::CurrentPace,
+    AdditionalInfoKind::TotalPlaytime,
+    AdditionalInfoKind::PbChance,
+];
 
 pub trait AdditionalInfo {
     fn new(timer: &Timer, config: &Config) -> Self
@@ -309,18 +330,126 @@ impl AdditionalInfo for PossibleTimeSaveInfo {
             );
 
             // Diff from gold to comp. This is the possible time save
-            tracing::debug!("{:?}", current_comparison_time);
             let gold_diff = current_comparison_time
                 .checked_sub(previous_comparion_time)
                 .unwrap_or_default()
                 .checked_sub(combined_gold)
                 .unwrap_or_default();
 
-            self.value
-                .set_label(config.format.segment.format_duration(&gold_diff).as_str());
+            self.value.set_label(
+                config
+                    .format
+                    .comparison
+                    .format_duration(&gold_diff)
+                    .as_str(),
+            );
         } else if timer.current_phase().is_ended() {
             self.value.set_label("");
         }
+    }
+
+    fn container(&self) -> &CenterBox {
+        &self.container
+    }
+}
+
+impl AdditionalInfo for CurrentPaceInfo {
+    fn new(timer: &Timer, config: &Config) -> Self {
+        let container = CenterBox::builder().orientation(Horizontal).build();
+
+        let label = Label::builder()
+            .label("Current Pace:")
+            .css_classes(["heading"])
+            .build();
+        let value = Label::builder().label("").css_classes(["timer"]).build();
+
+        container.set_start_widget(Some(&label));
+        container.set_end_widget(Some(&value));
+
+        let mut res = Self { container, value };
+
+        res.update(timer, config); // Initialize with default timer state
+
+        res
+    }
+
+    fn update(&mut self, timer: &Timer, config: &Config) {
+        if timer.current_phase().is_not_running() {
+            self.value.set_label("");
+        } else {
+            let timer_snaptshot = timer.snapshot();
+            let pace = current_pace::calculate(&timer_snaptshot, timer.current_comparison())
+                .0
+                .unwrap_or_default();
+            let pace = config.format.timer.format_time_span(&pace);
+            self.value.set_label(&pace);
+        }
+    }
+
+    fn container(&self) -> &CenterBox {
+        &self.container
+    }
+}
+
+impl AdditionalInfo for PbChanceInfo {
+    fn new(timer: &Timer, config: &Config) -> Self {
+        let container = CenterBox::builder().orientation(Horizontal).build();
+
+        let label = Label::builder()
+            .label("PB Chance:")
+            .css_classes(["heading"])
+            .build();
+        let value = Label::builder().label("").css_classes(["timer"]).build();
+
+        container.set_start_widget(Some(&label));
+        container.set_end_widget(Some(&value));
+
+        let mut res = Self { container, value };
+
+        res.update(timer, config); // Initialize with default timer state
+
+        res
+    }
+
+    fn update(&mut self, timer: &Timer, _config: &Config) {
+        if timer.current_phase().is_not_running() {
+            self.value.set_label("");
+        } else {
+            let chance = pb_chance::for_timer(&timer.snapshot()).0;
+            self.value
+                .set_label(format!("{:.2}%", chance * 100.0).as_str());
+        }
+    }
+
+    fn container(&self) -> &CenterBox {
+        &self.container
+    }
+}
+
+impl AdditionalInfo for TotalPlaytimeInfo {
+    fn new(timer: &Timer, config: &Config) -> Self {
+        let container = CenterBox::builder().orientation(Horizontal).build();
+
+        let label = Label::builder()
+            .label("Total Playtime:")
+            .css_classes(["heading"])
+            .build();
+        let value = Label::builder().label("").css_classes(["timer"]).build();
+
+        container.set_start_widget(Some(&label));
+        container.set_end_widget(Some(&value));
+
+        let mut res = Self { container, value };
+
+        res.update(timer, config); // Initialize with default timer state
+
+        res
+    }
+
+    fn update(&mut self, timer: &Timer, config: &Config) {
+        let playtime = total_playtime::calculate(timer);
+        self.value
+            .set_label(&config.format.comparison.format_time_span(&playtime));
     }
 
     fn container(&self) -> &CenterBox {

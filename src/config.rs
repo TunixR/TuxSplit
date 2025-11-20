@@ -36,6 +36,7 @@ pub struct Config {
     hotkey_system: Option<HotkeySystem>,
 }
 
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Config")
@@ -69,6 +70,7 @@ pub struct General {
     pub timing_method: Option<TimingMethod>,
     pub comparison: Option<String>,
     pub auto_splitter: Option<PathBuf>,
+    pub additional_info: AdditionalInfoVisibility,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -120,6 +122,34 @@ impl Default for Format {
             timer: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
             segment: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
             comparison: TimeFormat::from_preset(TimeFormatPreset::ShowDecimals),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct AdditionalInfoVisibility {
+    pub show_prev_segment_diff: bool,
+    pub show_prev_segment_best: bool,
+    pub show_best_possible_time: bool,
+    pub show_possible_time_save: bool,
+    pub show_current_pace: bool,
+    pub show_total_playtime: bool,
+    pub show_pb_chance: bool,
+}
+
+impl Default for AdditionalInfoVisibility {
+    fn default() -> Self {
+        Self {
+            show_prev_segment_diff: false,
+            show_prev_segment_best: true,
+            show_best_possible_time: true,
+            show_possible_time_save: true,
+            show_current_pace: false,
+            show_total_playtime: false,
+            show_pb_chance: false,
         }
     }
 }
